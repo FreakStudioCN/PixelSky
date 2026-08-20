@@ -20,6 +20,18 @@ Web：`http://127.0.0.1:5173`；Helper 只监听 `127.0.0.1:8765`。
 
 Workshop 课前部署见 [WORKSHOP.md](WORKSHOP.md)，环境检查可运行 `scripts\workshop-check.ps1`。固件放置说明见 `firmware\README.md`。
 
+## Cloudflare 部署
+
+`frontend/functions` 提供 Pages Functions 云端 API，线上前端会调用 `/api/generate`；串口、烧录和 `mpremote` 仍由连接设备电脑上的本地 Helper 处理。
+
+```powershell
+cd frontend
+npm run build
+npx wrangler pages deploy dist --project-name pixelsky --branch main
+```
+
+云端动画生成在没有模型密钥时使用内置模板。需要接入兼容 Chat Completions 的模型时，可在 Cloudflare 项目中配置 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY` 和 `PIXELSKY_AI_MODEL`。
+
 ## 技术依据
 
 - NeopixelMatrixTool：https://github.com/FreakStudioCN/NeopixelMatrixTool

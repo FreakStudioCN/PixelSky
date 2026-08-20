@@ -3,12 +3,13 @@ import type { PixelProject } from "./pixel";
 export const HELPER_BASE = "http://127.0.0.1:8765";
 
 const TIMEOUT = 8000;
+const CLOUD_BASE = typeof window !== "undefined" && window.location.protocol === "https:" ? "" : HELPER_BASE;
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, base = HELPER_BASE): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT);
   try {
-    const res = await fetch(`${HELPER_BASE}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       ...init,
       signal: controller.signal,
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -52,7 +53,7 @@ export const generateAnimation = (body: { prompt: string; width: number; height:
   request<{ project?: Partial<PixelProject> }>("/api/generate", {
     method: "POST",
     body: JSON.stringify({ ...body, brightness: body.brightness / 100 }),
-  });
+  }, CLOUD_BASE);
 
 export const uploadRuntime = (body: { port: string; project: PixelProject }) =>
   request<{ message?: string }>("/api/upload-runtime", { method: "POST", body: JSON.stringify({ ...body, project: { ...body.project, brightness: body.project.brightness / 100 } }) });
