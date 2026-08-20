@@ -14,7 +14,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 
 Web：`http://127.0.0.1:5173`；Helper 只监听 `127.0.0.1:8765`。
 
-支持 8×8、16×8 和 16×16 画布，点击/拖拽绘画、创作/硬件双视图、语音或文本创意、RGB565 双向转换与旧文件导入、最多 32 帧播放、拖拽排序、帧操作撤销、单帧时长、循环控制、项目 JSON、串口扫描、固件烧录、设备检查、灯板测试、完整部署和动画快速上传。页面默认显示随画布实时更新的 `animation.json` 与 `config.json`。没有模型密钥时自动使用内置模板。
+支持 8×8、16×8 和 16×16 画布，点击/拖拽绘画、创作/硬件双视图、语音或文本创意、RGB565 双向转换与旧文件导入、最多 32 帧播放、拖拽排序、帧操作撤销、单帧时长、循环控制、项目 JSON、串口扫描、固件烧录、设备检查、灯板测试、完整部署和动画快速上传。页面可实时预览并导出 `animation.json`、设备配置、独立 MicroPython `main.py` 和 Arduino `.ino`。没有模型密钥时自动使用内置模板。
 
 媒体转换支持图片、视频、动态 GIF 和 1–4 个字符，提供亮度、对比度与饱和度调整，并兼容 NeopixelMatrixTool 的 `{pixels,width,height,description,version}` RGB565 JSON。矩阵校准支持六种颜色顺序、翻转、旋转、Gamma 与 RGB 通道平衡。
 

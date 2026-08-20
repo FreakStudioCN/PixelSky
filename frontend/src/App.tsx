@@ -11,6 +11,7 @@ import { ToolStrip, type Tool } from "@/components/pixelsky/ToolStrip";
 import { TopBar } from "@/components/pixelsky/TopBar";
 import { WorkshopCard } from "@/components/pixelsky/WorkshopCard";
 import { checkDevice, flashFirmware, generateAnimation, getHealth, getPorts, testLeds, uploadAnimation, uploadRuntime, type DeviceCheck } from "@/lib/helper";
+import { codeFilename, downloadText, toArduinoCode, toMicroPythonCode, type CodeExportFormat } from "@/lib/codegen";
 import { CANVAS_PRESETS, EMPTY, MAX_FRAMES, createProject, defaultFrameName, downloadJson, emptyFrame, frameDurationForFps, parseProject, resizeFrames, safeFileName, sanitizeFrames, toAnimationJson, type EspChip, type Frame, type PixelProject, type ViewMode } from "@/lib/pixel";
 
 type Notice = { text: string; error?: boolean } | null;
@@ -193,8 +194,14 @@ export default function App() {
   };
 
   const shownFrame = frames[playing ? previewIndex : activeIndex] ?? emptyFrame(width, height);
+  const exportFile = (format: CodeExportFormat) => {
+    if (format === "json") return downloadJson("animation.json", toAnimationJson(project));
+    const code = format === "micropython" ? toMicroPythonCode(project) : toArduinoCode(project);
+    downloadText(codeFilename(project, format), code);
+    tell(format === "micropython" ? "MicroPython 代码已导出" : "Arduino 代码已导出");
+  };
   return <div className="min-h-screen bg-background text-foreground">
-    <TopBar name={name} onNameChange={setName} onOpen={() => fileInput.current?.click()} onSave={() => downloadJson(`${safeFileName(name)}.pixelsky.json`, project)} onExport={() => downloadJson("animation.json", toAnimationJson(project))} />
+    <TopBar name={name} onNameChange={setName} onOpen={() => fileInput.current?.click()} onSave={() => downloadJson(`${safeFileName(name)}.pixelsky.json`, project)} onExport={exportFile} />
     <input ref={fileInput} hidden type="file" accept=".json,application/json" onChange={(event) => void openProject(event.target.files?.[0])} />
     <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:p-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section className="panel min-w-0 p-4 lg:p-5">
@@ -206,7 +213,7 @@ export default function App() {
             <span className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><Grid3X3 className="h-3.5 w-3.5" />{width * height} PIXELS</span>
           </div>
         </div>
-        {viewMode === "hardware" && <p className="mb-3 rounded-md border border-ai/30 bg-ai/10 px-3 py-2 text-[11px] text-ai">LED 编号按模块行优先排列，每块 8×8 内部蛇形走线；紫色边界表示模块拼接线。硬件视图只读。</p>}
+        {viewMode === "hardware" && <p className="mb-3 rounded-md border border-ai/30 bg-ai/10 px-3 py-2 text-[11px] text-ai">LED 编号按模块行优先排列，每块 8×8 使用{project.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"}走线；紫色边界表示模块拼接线。硬件视图只读。</p>}
         <PixelCanvas frame={shownFrame} width={width} height={height} viewMode={viewMode} readOnly={viewMode === "hardware"} hardware={project} onStrokeStart={snapshot} onStrokeEnd={() => undefined} onPaint={(index) => setFrames((items) => items.map((frame, frameIndex) => frameIndex === activeIndex ? frame.map((value, pixelIndex) => pixelIndex === index ? (tool === "eraser" ? EMPTY : color) : value) : frame))} />
         <div className="mt-4"><ToolStrip tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} onClear={() => replaceFrames(frames.map((frame, index) => index === activeIndex ? emptyFrame(width, height) : frame))} onUndo={undo} onRedo={redo} canUndo={history.length > 0} canRedo={future.length > 0} /></div>
       </section>
