@@ -90,30 +90,46 @@ function fallbackFrames(prompt: string, width: number, height: number): Frame[] 
   return frames;
 }
 
-const validFrames = (value: unknown, width: number, height: number): value is Frame[] => Array.isArray(value) && value.length > 0 && value.length <= 32 && value.every((frame) => Array.isArray(frame) && frame.length === width * height && frame.every((color) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)));
+const normalizeAiColor = (value: unknown): string | null => {
+  if (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)) return value.toUpperCase();
+  if (Array.isArray(value) && value.length >= 3) {
+    const rgb = value.slice(0, 3).map(Number);
+    if (rgb.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+      return `#${rgb.map((part) => part.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+    }
+  }
+  return null;
+};
 
 const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: number, height: number): Frame[] | null => {
-  if (validFrames(value, width, height)) return value;
   const paletteSource = Array.isArray(paletteValue)
     ? paletteValue
     : paletteValue && typeof paletteValue === "object"
       ? Object.entries(paletteValue as Record<string, unknown>).sort(([a], [b]) => Number(a) - Number(b)).map(([, color]) => color)
       : [];
-  if (paletteSource.length < 2 || paletteSource.length > 10) return null;
   const palette = paletteSource.map((entry) => {
     const color = typeof entry === "string" ? entry : entry && typeof entry === "object" ? (entry as { color?: unknown; hex?: unknown }).color ?? (entry as { hex?: unknown }).hex : null;
-    return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null;
+    return normalizeAiColor(color);
   });
   const frameSource = Array.isArray(value)
-    ? value
+    ? value.slice(0, 32)
     : value && typeof value === "object"
-      ? Object.values(value as Record<string, unknown>)
+      ? Object.values(value as Record<string, unknown>).slice(0, 32)
       : [];
-  if (palette.some((color) => color === null) || frameSource.length < 1 || frameSource.length > 32) return null;
+  if (frameSource.length < 1) return null;
   const frames: Frame[] = [];
   for (const entry of frameSource) {
-    const rows = Array.isArray(entry) ? entry : entry && typeof entry === "object" ? (entry as { rows?: unknown; grid?: unknown; pixels?: unknown }).rows ?? (entry as { grid?: unknown }).grid ?? (entry as { pixels?: unknown }).pixels : null;
+    const data = Array.isArray(entry) ? entry : entry && typeof entry === "object" ? (entry as { rows?: unknown; grid?: unknown; pixels?: unknown }).pixels ?? (entry as { rows?: unknown }).rows ?? (entry as { grid?: unknown }).grid : null;
+    if (Array.isArray(data) && data.length >= width * height) {
+      const direct = data.slice(0, width * height).map(normalizeAiColor);
+      if (direct.every((color): color is string => color !== null)) {
+        frames.push(direct);
+        continue;
+      }
+    }
+    const rows = data;
     if (!Array.isArray(rows) || rows.length !== height) return null;
+    if (palette.length < 2 || palette.length > 10 || palette.some((color) => color === null)) return null;
     const frame: Frame = [];
     for (const row of rows) {
       const symbols = typeof row === "string" ? [...row.replace(/\s/g, "")] : Array.isArray(row) ? row : [];
@@ -155,7 +171,7 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
         max_tokens: 3000,
         stream: false,
         messages: [
-          { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
+          { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Understand Simplified Chinese instructions as the primary input language. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
           { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, recognition_guidance: subjectGuidance, exact_output_example: { palette: ["#07130F", "#FFFFFF", "#FFCB5C"], frames: [Array.from({ length: height }, () => "0".repeat(width))] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} digits`, "each digit is the zero-based palette index"], requirements: ["Replace the blank example with recognizable pixel art matching the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
         ],
       }),
@@ -182,9 +198,10 @@ export const onRequestPost = async ({ request, env }: Context) => {
   if (!prompt) return json({ detail: "请输入创意描述" }, 422);
   if (!SIZES.has(`${width}x${height}`)) return json({ detail: "仅支持 8×8、16×8 或 16×16" }, 422);
   const remote = await remoteFrames(env, prompt, width, height);
-  const frames = remote.frames || fallbackFrames(prompt, width, height);
+  const frames = (remote.frames || fallbackFrames(prompt, width, height)).slice(0, 32);
   const duration = Math.max(100, Math.round(1000 / fps));
-  return json({ source: remote.frames ? "deepseek" : "fallback", provider_status: remote.status, project: { version: 1, name: "AI 创意", width, height, fps, brightness, frames, frame_durations: frames.map(() => duration), loop: true } });
+  const animation = { schema: "pixelsky.animation.v1", width, height, fps, brightness, frames: frames.map((pixels, index) => ({ name: `帧 ${String(index + 1).padStart(2, "0")}`, duration_ms: duration, pixels })) };
+  return json({ source: remote.frames ? "deepseek" : "fallback", provider_status: remote.status, animation, project: { version: 1, name: "AI 创意", width, height, fps, brightness, frames, frame_durations: frames.map(() => duration), frame_names: animation.frames.map((frame) => frame.name), loop: true } });
 };
 
 export const onRequestOptions = async () => new Response(null, { status: 204, headers: corsHeaders });

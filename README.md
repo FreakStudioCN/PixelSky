@@ -39,6 +39,8 @@ npx wrangler pages secret put DEEPSEEK_API_KEY --project-name pixelsky
 
 默认模型为 `deepseek-v4-flash`，可用 `DEEPSEEK_MODEL` 覆盖。本地 Helper 使用同名环境变量，也兼容原有的 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY` 和 `PIXELSKY_AI_MODEL`。
 
+`POST /api/generate` 优先理解中文自然语言，并返回 `pixelsky.animation.v1` 结构化动画。后端接受 AI 生成的 `#RRGGBB` 或 `[r,g,b]` 颜色，校验 RGB 范围，将每帧裁剪到所选画布像素数、最多保留 32 帧，并把亮度限制在 `0.2` 以内。响应同时保留前端直接使用的 `project` 字段；AI 不可用时返回可继续手绘编辑的备用像素帧。
+
 ## 技术依据
 
 - NeopixelMatrixTool：https://github.com/FreakStudioCN/NeopixelMatrixTool
