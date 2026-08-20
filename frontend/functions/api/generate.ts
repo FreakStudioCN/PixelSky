@@ -34,7 +34,20 @@ const setPixel = (frame: Frame, width: number, height: number, x: number, y: num
 function fallbackFrames(prompt: string, width: number, height: number): Frame[] {
   const frames = Array.from({ length: 4 }, () => empty(width, height));
   const low = prompt.toLowerCase();
-  if (prompt.includes("爱心") || low.includes("heart")) {
+  if (prompt.includes("猫") || low.includes("cat")) {
+    const left = Math.floor(width / 2) - 3;
+    const top = Math.max(1, Math.floor((height - 6) / 2));
+    frames.forEach((frame, index) => {
+      for (let y = top + 1; y <= top + 5; y++) for (let x = left; x <= left + 5; x++) setPixel(frame, width, height, x, y, COLORS.yellow);
+      setPixel(frame, width, height, left + 1, top, COLORS.yellow);
+      setPixel(frame, width, height, left + 4, top, COLORS.yellow);
+      const eyeY = top + (index === 2 ? 4 : 3);
+      setPixel(frame, width, height, left + 1, eyeY, COLORS.bg);
+      setPixel(frame, width, height, left + 4, eyeY, COLORS.bg);
+      setPixel(frame, width, height, left + 2, top + 4, COLORS.pink);
+      setPixel(frame, width, height, left + 3, top + 4, COLORS.pink);
+    });
+  } else if (prompt.includes("爱心") || low.includes("heart")) {
     const points = [[-3,-1],[-2,-2],[-1,-1],[0,-1],[1,-2],[2,-1],[-4,0],[3,0],[-3,1],[2,1],[-2,2],[1,2],[-1,3],[0,3]];
     frames.forEach((frame, index) => points.forEach(([dx, dy]) => setPixel(frame, width, height, Math.floor(width / 2) + dx, Math.floor(height / 2) + dy, index % 2 ? COLORS.purple : COLORS.pink)));
   } else if (prompt.includes("彩虹") || low.includes("rainbow")) {
@@ -50,6 +63,29 @@ function fallbackFrames(prompt: string, width: number, height: number): Frame[] 
 }
 
 const validFrames = (value: unknown, width: number, height: number): value is Frame[] => Array.isArray(value) && value.length > 0 && value.length <= 32 && value.every((frame) => Array.isArray(frame) && frame.length === width * height && frame.every((color) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)));
+
+const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: number, height: number): Frame[] | null => {
+  if (validFrames(value, width, height)) return value;
+  if (!Array.isArray(paletteValue) || paletteValue.length < 2 || paletteValue.length > 10) return null;
+  const palette = paletteValue.map((color) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null);
+  if (palette.some((color) => color === null) || !Array.isArray(value) || value.length < 1 || value.length > 32) return null;
+  const frames: Frame[] = [];
+  for (const rows of value) {
+    if (!Array.isArray(rows) || rows.length !== height) return null;
+    const frame: Frame = [];
+    for (const row of rows) {
+      if (typeof row !== "string" || row.length !== width) return null;
+      for (const symbol of row) {
+        const index = Number(symbol);
+        const color = Number.isInteger(index) ? palette[index] : null;
+        if (!color) return null;
+        frame.push(color);
+      }
+    }
+    frames.push(frame);
+  }
+  return frames;
+};
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
@@ -70,19 +106,20 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
       body: JSON.stringify({
         model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-flash",
         response_format: { type: "json_object" },
-        max_tokens: 8000,
+        max_tokens: 3000,
         stream: false,
         messages: [
-          { role: "system", content: "You design tiny LED pixel animations. Always return one valid JSON object and no Markdown." },
-          { role: "user", content: JSON.stringify({ prompt, width, height, max_frames: maxGeneratedFrames, instruction: `Return JSON only as {\"frames\": string[frame][${width * height}]}. Use 1 to ${maxGeneratedFrames} frames. Every color must be #RRGGBB. Each flat frame is row-major from top-left.` }) },
+          { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
+          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, output_schema: { palette: ["#RRGGBB, index 0 is background", "up to 9 more colors"], frames: [`${height} strings per frame`, `each string is exactly ${width} digits`, "each digit is a palette index 0-9"] }, requirements: ["Match the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
         ],
       }),
     });
     if (!response.ok) return { frames: null, status: "request_failed" };
     const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as { frames?: unknown };
-    return validFrames(parsed.frames, width, height)
-      ? { frames: parsed.frames, status: "ok" }
+    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as { palette?: unknown; frames?: unknown };
+    const frames = normalizeModelFrames(parsed.frames, parsed.palette, width, height);
+    return frames
+      ? { frames, status: "ok" }
       : { frames: null, status: "invalid_response" };
   } catch { return { frames: null, status: "request_failed" }; }
 }

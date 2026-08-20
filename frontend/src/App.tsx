@@ -129,7 +129,7 @@ export default function App() {
 
   const generate = async () => {
     if (!prompt.trim()) return tell("请先输入创意描述", true); setGenerating(true);
-    try { const data = await generateAnimation({ prompt: prompt.trim(), width, height, fps, brightness }); const next = sanitizeFrames(data.project?.frames, width, height); replaceFrames(next, next.map(() => frameDurationForFps(fps))); setActiveIndex(0); setPlaying(false); tell("像素动画已生成"); }
+    try { const data = await generateAnimation({ prompt: prompt.trim(), width, height, fps, brightness }); const next = sanitizeFrames(data.project?.frames, width, height); replaceFrames(next, next.map(() => frameDurationForFps(fps))); setActiveIndex(0); setPlaying(false); tell(data.source === "deepseek" ? `DeepSeek 已生成 ${width}×${height} 像素动画` : "DeepSeek 暂时不可用，已生成匹配主题的备用像素动画", data.source !== "deepseek"); }
     catch (error) { tell(error instanceof Error ? error.message : "生成失败", true); }
     finally { setGenerating(false); }
   };

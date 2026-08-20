@@ -54,7 +54,7 @@ export const getPorts = async (): Promise<string[]> => {
 };
 
 export const generateAnimation = (body: { prompt: string; width: number; height: number; fps: number; brightness: number }) =>
-  request<{ project?: Partial<PixelProject> }>("/api/generate", {
+  request<{ source?: "deepseek" | "fallback"; provider_status?: string; project?: Partial<PixelProject> }>("/api/generate", {
     method: "POST",
     body: JSON.stringify({ ...body, brightness: body.brightness / 100 }),
   }, CLOUD_BASE, AI_TIMEOUT, "DeepSeek 云端服务");
