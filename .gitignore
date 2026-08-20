@@ -4,6 +4,7 @@ frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
 .tools/
+.wrangler/
 node.zip
 .venv/
 __pycache__/
