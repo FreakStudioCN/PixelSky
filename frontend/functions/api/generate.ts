@@ -35,17 +35,45 @@ function fallbackFrames(prompt: string, width: number, height: number): Frame[] 
   const frames = Array.from({ length: 4 }, () => empty(width, height));
   const low = prompt.toLowerCase();
   if (prompt.includes("猫") || low.includes("cat")) {
-    const left = Math.floor(width / 2) - 3;
-    const top = Math.max(1, Math.floor((height - 6) / 2));
+    const left = Math.floor(width / 2) - 4;
+    const right = left + 7;
+    const top = Math.max(0, Math.floor((height - 7) / 2));
     frames.forEach((frame, index) => {
-      for (let y = top + 1; y <= top + 5; y++) for (let x = left; x <= left + 5; x++) setPixel(frame, width, height, x, y, COLORS.yellow);
-      setPixel(frame, width, height, left + 1, top, COLORS.yellow);
-      setPixel(frame, width, height, left + 4, top, COLORS.yellow);
-      const eyeY = top + (index === 2 ? 4 : 3);
-      setPixel(frame, width, height, left + 1, eyeY, COLORS.bg);
-      setPixel(frame, width, height, left + 4, eyeY, COLORS.bg);
-      setPixel(frame, width, height, left + 2, top + 4, COLORS.pink);
+      // Triangular ears with pink inner ears.
+      setPixel(frame, width, height, left, top, COLORS.white);
+      setPixel(frame, width, height, right, top, COLORS.white);
+      for (let x = left; x <= left + 2; x++) setPixel(frame, width, height, x, top + 1, COLORS.white);
+      for (let x = right - 2; x <= right; x++) setPixel(frame, width, height, x, top + 1, COLORS.white);
+      setPixel(frame, width, height, left + 1, top + 1, COLORS.pink);
+      setPixel(frame, width, height, right - 1, top + 1, COLORS.pink);
+
+      // White outline and purple face make the silhouette readable on LEDs.
+      for (let x = left; x <= right; x++) {
+        setPixel(frame, width, height, x, top + 2, COLORS.white);
+        setPixel(frame, width, height, x, top + 6, COLORS.white);
+      }
+      for (let y = top + 3; y <= top + 5; y++) {
+        setPixel(frame, width, height, left, y, COLORS.white);
+        setPixel(frame, width, height, right, y, COLORS.white);
+        for (let x = left + 1; x < right; x++) setPixel(frame, width, height, x, y, COLORS.purple);
+      }
+
+      // Cat eyes blink on frame three; nose, mouth, and whiskers stay fixed.
+      const blinking = index === 2;
+      setPixel(frame, width, height, left + 2, top + 3, blinking ? COLORS.bg : COLORS.yellow);
+      setPixel(frame, width, height, right - 2, top + 3, blinking ? COLORS.bg : COLORS.yellow);
       setPixel(frame, width, height, left + 3, top + 4, COLORS.pink);
+      setPixel(frame, width, height, left + 4, top + 4, COLORS.pink);
+      setPixel(frame, width, height, left + 3, top + 5, COLORS.bg);
+      setPixel(frame, width, height, left + 4, top + 5, COLORS.bg);
+      for (let x = Math.max(0, left - 2); x < left; x++) {
+        setPixel(frame, width, height, x, top + 4, COLORS.white);
+        setPixel(frame, width, height, x, top + 5, COLORS.white);
+      }
+      for (let x = right + 1; x <= Math.min(width - 1, right + 2); x++) {
+        setPixel(frame, width, height, x, top + 4, COLORS.white);
+        setPixel(frame, width, height, x, top + 5, COLORS.white);
+      }
     });
   } else if (prompt.includes("爱心") || low.includes("heart")) {
     const points = [[-3,-1],[-2,-2],[-1,-1],[0,-1],[1,-2],[2,-1],[-4,0],[3,0],[-3,1],[2,1],[-2,2],[1,2],[-1,3],[0,3]];
@@ -113,6 +141,9 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
   if (!apiKey) return { frames: null, status: "not_configured" };
   const baseUrl = (env.PIXELSKY_AI_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
   const maxGeneratedFrames = width * height <= 64 ? 6 : width * height <= 128 ? 4 : 2;
+  const subjectGuidance = prompt.includes("猫") || prompt.toLowerCase().includes("cat")
+    ? "The cat must visibly have two triangular ears, two separated eyes, a small nose, a mouth, and left/right whiskers. Animate the eyelids only for blinking; do not draw a bird or chicken."
+    : "Use the subject's most distinctive silhouette and features so it is recognizable without explanation.";
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
@@ -125,7 +156,7 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
         stream: false,
         messages: [
           { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
-          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, exact_output_example: { palette: ["#07130F", "#FFFFFF", "#FFCB5C"], frames: [Array.from({ length: height }, () => "0".repeat(width))] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} digits`, "each digit is the zero-based palette index"], requirements: ["Replace the blank example with recognizable pixel art matching the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
+          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, recognition_guidance: subjectGuidance, exact_output_example: { palette: ["#07130F", "#FFFFFF", "#FFCB5C"], frames: [Array.from({ length: height }, () => "0".repeat(width))] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} digits`, "each digit is the zero-based palette index"], requirements: ["Replace the blank example with recognizable pixel art matching the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
         ],
       }),
     });
