@@ -13,6 +13,7 @@ interface TimelineProps {
   fps: number;
   brightness: number;
   frameDurations: number[];
+  frameNames: string[];
   loop: boolean;
   width: number;
   onSelect: (index: number) => void;
@@ -26,6 +27,7 @@ interface TimelineProps {
   onNext: () => void;
   onLoopChange: (loop: boolean) => void;
   onDurationChange: (index: number, duration: number) => void;
+  onNameChange: (index: number, name: string) => void;
   onTogglePlay: () => void;
   onFpsChange: (fps: number) => void;
   onBrightnessChange: (value: number) => void;
@@ -56,6 +58,7 @@ export function Timeline({
   fps,
   brightness,
   frameDurations,
+  frameNames,
   loop,
   width,
   onSelect,
@@ -69,6 +72,7 @@ export function Timeline({
   onNext,
   onLoopChange,
   onDurationChange,
+  onNameChange,
   onTogglePlay,
   onFpsChange,
   onBrightnessChange,
@@ -169,6 +173,16 @@ export function Timeline({
                   {frames.length > 1 && <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />}
                 </span>
               </button>
+              <input
+                draggable={false}
+                value={frameNames[index] ?? `帧 ${String(index + 1).padStart(2, "0")}`}
+                maxLength={24}
+                aria-label={`帧 ${String(index + 1).padStart(2, "0")} 名称`}
+                onFocus={() => onSelect(index)}
+                onChange={(event) => onNameChange(index, event.target.value)}
+                onClick={(event) => event.stopPropagation()}
+                className="mt-1 h-6 w-full rounded border border-border bg-surface-raised px-1.5 text-[10px] text-foreground outline-none focus:border-primary"
+              />
               <label className="mt-1 flex items-center justify-end gap-1 px-1 font-mono text-[9px] text-muted-foreground" onClick={(event) => event.stopPropagation()}>
                 <span className="sr-only">帧 {String(index + 1).padStart(2, "0")} 时长</span>
                 <input

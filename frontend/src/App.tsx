@@ -11,10 +11,10 @@ import { ToolStrip, type Tool } from "@/components/pixelsky/ToolStrip";
 import { TopBar } from "@/components/pixelsky/TopBar";
 import { WorkshopCard } from "@/components/pixelsky/WorkshopCard";
 import { checkDevice, flashFirmware, generateAnimation, getHealth, getPorts, testLeds, uploadAnimation, uploadRuntime, type DeviceCheck } from "@/lib/helper";
-import { CANVAS_PRESETS, EMPTY, MAX_FRAMES, createProject, downloadJson, emptyFrame, frameDurationForFps, parseProject, resizeFrames, safeFileName, sanitizeFrames, toAnimationJson, type EspChip, type Frame, type PixelProject, type ViewMode } from "@/lib/pixel";
+import { CANVAS_PRESETS, EMPTY, MAX_FRAMES, createProject, defaultFrameName, downloadJson, emptyFrame, frameDurationForFps, parseProject, resizeFrames, safeFileName, sanitizeFrames, toAnimationJson, type EspChip, type Frame, type PixelProject, type ViewMode } from "@/lib/pixel";
 
 type Notice = { text: string; error?: boolean } | null;
-type HistoryEntry = { frames: Frame[]; frameDurations: number[]; activeIndex: number };
+type HistoryEntry = { frames: Frame[]; frameDurations: number[]; frameNames: string[]; activeIndex: number };
 type SpeechResultEvent = Event & { results: ArrayLike<ArrayLike<{ transcript: string }>> };
 type SpeechRecognitionLike = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((event: SpeechResultEvent) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; start(): void; stop(): void };
 type SpeechConstructor = new () => SpeechRecognitionLike;
@@ -27,6 +27,7 @@ export default function App() {
   const [height, setHeight] = useState(initial.height);
   const [frames, setFrames] = useState<Frame[]>(initial.frames);
   const [frameDurations, setFrameDurations] = useState(initial.frame_durations);
+  const [frameNames, setFrameNames] = useState(initial.frame_names);
   const [loop, setLoop] = useState(initial.loop);
   const [activeIndex, setActiveIndex] = useState(0);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -57,14 +58,15 @@ export default function App() {
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const voiceSupported = typeof window !== "undefined" && Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
-  const project: PixelProject = useMemo(() => ({ version: 1, name, width, height, fps, brightness, frames, frame_durations: frameDurations, loop, ...hardware }), [name, width, height, fps, brightness, frames, frameDurations, loop, hardware]);
+  const project: PixelProject = useMemo(() => ({ version: 1, name, width, height, fps, brightness, frames, frame_durations: frameDurations, frame_names: frameNames, loop, ...hardware }), [name, width, height, fps, brightness, frames, frameDurations, frameNames, loop, hardware]);
   const tell = useCallback((text: string, error = false) => { setNotice({ text, error }); if (noticeTimer.current) window.clearTimeout(noticeTimer.current); noticeTimer.current = window.setTimeout(() => setNotice(null), 3500); }, []);
-  const currentSnapshot = useCallback((): HistoryEntry => ({ frames: frames.map((frame) => [...frame]), frameDurations: [...frameDurations], activeIndex }), [frames, frameDurations, activeIndex]);
+  const currentSnapshot = useCallback((): HistoryEntry => ({ frames: frames.map((frame) => [...frame]), frameDurations: [...frameDurations], frameNames: [...frameNames], activeIndex }), [frames, frameDurations, frameNames, activeIndex]);
   const snapshot = useCallback(() => { setHistory((items) => [...items.slice(-39), currentSnapshot()]); setFuture([]); }, [currentSnapshot]);
-  const replaceFrames = (next: Frame[], nextDurations?: number[]) => {
+  const replaceFrames = (next: Frame[], nextDurations?: number[], nextNames?: string[]) => {
     snapshot();
     setFrames(next);
     setFrameDurations(next.map((_, index) => nextDurations?.[index] ?? frameDurations[index] ?? frameDurationForFps(fps)));
+    setFrameNames(next.map((_, index) => nextNames?.[index] ?? frameNames[index] ?? defaultFrameName(index)));
     setActiveIndex((index) => Math.min(index, next.length - 1));
   };
 
@@ -88,18 +90,21 @@ export default function App() {
   useEffect(() => setPreviewIndex(activeIndex), [activeIndex]);
   useEffect(() => () => recognition.current?.stop(), []);
 
-  const restoreSnapshot = (entry: HistoryEntry) => { setFrames(entry.frames.map((frame) => [...frame])); setFrameDurations([...entry.frameDurations]); setActiveIndex(Math.min(entry.activeIndex, entry.frames.length - 1)); setPlaying(false); };
+  const restoreSnapshot = (entry: HistoryEntry) => { setFrames(entry.frames.map((frame) => [...frame])); setFrameDurations([...entry.frameDurations]); setFrameNames([...entry.frameNames]); setActiveIndex(Math.min(entry.activeIndex, entry.frames.length - 1)); setPlaying(false); };
   const undo = () => { const previous = history.at(-1); if (!previous) return; setFuture((items) => [currentSnapshot(), ...items]); restoreSnapshot(previous); setHistory((items) => items.slice(0, -1)); };
   const redo = () => { const next = future[0]; if (!next) return; setHistory((items) => [...items, currentSnapshot()]); restoreSnapshot(next); setFuture((items) => items.slice(1)); };
   const reorderFrames = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || !frames[fromIndex] || !frames[toIndex]) return;
     const next = [...frames];
     const nextDurations = [...frameDurations];
+    const nextNames = [...frameNames];
     const [moved] = next.splice(fromIndex, 1);
     const [movedDuration] = nextDurations.splice(fromIndex, 1);
+    const [movedName] = nextNames.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     nextDurations.splice(toIndex, 0, movedDuration);
-    replaceFrames(next, nextDurations);
+    nextNames.splice(toIndex, 0, movedName);
+    replaceFrames(next, nextDurations, nextNames);
     setActiveIndex((index) => {
       if (index === fromIndex) return toIndex;
       if (fromIndex < index && index <= toIndex) return index - 1;
@@ -114,6 +119,31 @@ export default function App() {
     snapshot();
     setFrameDurations((items) => items.map((item, itemIndex) => itemIndex === index ? duration : item));
   };
+  const changeFrameName = (index: number, value: string) => setFrameNames((items) => items.map((item, itemIndex) => itemIndex === index ? value.slice(0, 24) : item));
+  const addFrame = () => {
+    if (frames.length >= MAX_FRAMES) return;
+    const nextIndex = frames.length;
+    replaceFrames([...frames, emptyFrame(width, height)], [...frameDurations, frameDurationForFps(fps)], [...frameNames, defaultFrameName(nextIndex)]);
+    setActiveIndex(nextIndex);
+    setPlaying(false);
+  };
+  const duplicateFrame = () => {
+    if (frames.length >= MAX_FRAMES) return;
+    const copyIndex = activeIndex + 1;
+    const sourceName = frameNames[activeIndex]?.trim() || defaultFrameName(activeIndex);
+    replaceFrames(
+      [...frames.slice(0, copyIndex), [...frames[activeIndex]], ...frames.slice(copyIndex)],
+      [...frameDurations.slice(0, copyIndex), frameDurations[activeIndex] ?? frameDurationForFps(fps), ...frameDurations.slice(copyIndex)],
+      [...frameNames.slice(0, copyIndex), `${sourceName} 副本`.slice(0, 24), ...frameNames.slice(copyIndex)],
+    );
+    setActiveIndex(copyIndex);
+    setPlaying(false);
+  };
+  const deleteFrame = () => {
+    if (frames.length <= 1) return;
+    replaceFrames(frames.filter((_, index) => index !== activeIndex), frameDurations.filter((_, index) => index !== activeIndex), frameNames.filter((_, index) => index !== activeIndex));
+    setPlaying(false);
+  };
 
   const changeCanvas = (presetId: string) => {
     const preset = CANVAS_PRESETS.find((item) => item.id === presetId); if (!preset || (preset.width === width && preset.height === height)) return;
@@ -123,13 +153,13 @@ export default function App() {
 
   const openProject = async (file?: File) => {
     if (!file) return;
-    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ pin: opened.pin, pixel_order: opened.pixel_order, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
+    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setFrameNames(opened.frame_names); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ pin: opened.pin, pixel_order: opened.pixel_order, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
     catch (error) { tell(error instanceof Error ? error.message : "项目 JSON 格式无效", true); }
   };
 
   const generate = async () => {
     if (!prompt.trim()) return tell("请先输入创意描述", true); setGenerating(true);
-    try { const data = await generateAnimation({ prompt: prompt.trim(), width, height, fps, brightness }); const next = sanitizeFrames(data.project?.frames, width, height); replaceFrames(next, next.map(() => frameDurationForFps(fps))); setActiveIndex(0); setPlaying(false); tell(data.source === "deepseek" ? `DeepSeek 已生成 ${width}×${height} 像素动画` : "DeepSeek 暂时不可用，已生成匹配主题的备用像素动画", data.source !== "deepseek"); }
+    try { const data = await generateAnimation({ prompt: prompt.trim(), width, height, fps, brightness }); const next = sanitizeFrames(data.project?.frames, width, height); replaceFrames(next, next.map(() => frameDurationForFps(fps)), next.map((_, index) => `AI ${defaultFrameName(index)}`)); setActiveIndex(0); setPlaying(false); tell(data.source === "deepseek" ? `DeepSeek 已生成 ${width}×${height} 像素动画` : "DeepSeek 暂时不可用，已生成匹配主题的备用像素动画", data.source !== "deepseek"); }
     catch (error) { tell(error instanceof Error ? error.message : "生成失败", true); }
     finally { setGenerating(false); }
   };
@@ -184,8 +214,8 @@ export default function App() {
         <AiCard prompt={prompt} onPromptChange={setPrompt} onGenerate={() => void generate()} loading={generating} listening={listening} voiceSupported={voiceSupported} onToggleVoice={toggleVoice} />
         <DeviceCard online={online} checking={checking} ports={ports} port={port} onPortChange={setPort} onRefresh={() => void refreshPorts()} onUploadRuntime={() => void sendToDevice("runtime")} onUploadAnimation={() => void sendToDevice("animation")} busy={uploading} />
       </aside>
-      <div className="xl:col-span-2"><Timeline frames={frames} frameDurations={frameDurations} loop={loop} width={width} activeIndex={activeIndex} previewIndex={previewIndex} playing={playing} fps={fps} brightness={brightness} onSelect={(index) => { setActiveIndex(index); setPlaying(false); }} onAdd={() => frames.length < MAX_FRAMES && replaceFrames([...frames, emptyFrame(width, height)], [...frameDurations, frameDurationForFps(fps)])} onDuplicate={() => frames.length < MAX_FRAMES && replaceFrames([...frames.slice(0, activeIndex + 1), [...frames[activeIndex]], ...frames.slice(activeIndex + 1)], [...frameDurations.slice(0, activeIndex + 1), frameDurations[activeIndex] ?? frameDurationForFps(fps), ...frameDurations.slice(activeIndex + 1)])} onDelete={() => frames.length > 1 && replaceFrames(frames.filter((_, index) => index !== activeIndex), frameDurations.filter((_, index) => index !== activeIndex))} onUndo={undo} canUndo={history.length > 0} onReorder={reorderFrames} onPrevious={() => { setActiveIndex((index) => (index - 1 + frames.length) % frames.length); setPlaying(false); }} onNext={() => { setActiveIndex((index) => (index + 1) % frames.length); setPlaying(false); }} onLoopChange={setLoop} onDurationChange={changeFrameDuration} onTogglePlay={() => { if (playing) setActiveIndex(previewIndex); else setPreviewIndex(activeIndex); setPlaying((value) => !value); }} onFpsChange={(nextFps) => { setFps(nextFps); setFrameDurations((items) => items.map(() => frameDurationForFps(nextFps))); }} onBrightnessChange={setBrightness} /></div>
-      <div className="xl:col-span-2"><MediaCard width={width} height={height} color={color} onFrames={(next, mediaName) => { replaceFrames(next, next.map(() => frameDurationForFps(fps))); setName(mediaName); setActiveIndex(0); setPlaying(false); tell("媒体已转换为可编辑像素动画"); }} /></div>
+      <div className="xl:col-span-2"><Timeline frames={frames} frameDurations={frameDurations} frameNames={frameNames} loop={loop} width={width} activeIndex={activeIndex} previewIndex={previewIndex} playing={playing} fps={fps} brightness={brightness} onSelect={(index) => { setActiveIndex(index); setPlaying(false); }} onAdd={addFrame} onDuplicate={duplicateFrame} onDelete={deleteFrame} onUndo={undo} canUndo={history.length > 0} onReorder={reorderFrames} onPrevious={() => { setActiveIndex((index) => (index - 1 + frames.length) % frames.length); setPlaying(false); }} onNext={() => { setActiveIndex((index) => (index + 1) % frames.length); setPlaying(false); }} onLoopChange={setLoop} onDurationChange={changeFrameDuration} onNameChange={changeFrameName} onTogglePlay={() => { if (playing) setActiveIndex(previewIndex); else setPreviewIndex(activeIndex); setPlaying((value) => !value); }} onFpsChange={(nextFps) => { setFps(nextFps); setFrameDurations((items) => items.map(() => frameDurationForFps(nextFps))); }} onBrightnessChange={setBrightness} /></div>
+      <div className="xl:col-span-2"><MediaCard width={width} height={height} color={color} onFrames={(next, mediaName) => { replaceFrames(next, next.map(() => frameDurationForFps(fps)), next.map((_, index) => defaultFrameName(index))); setName(mediaName); setActiveIndex(0); setPlaying(false); tell("媒体已转换为可编辑像素动画"); }} /></div>
       <div className="xl:col-span-2"><HardwareSettingsCard project={project} onChange={(patch) => setHardware((current) => ({ ...current, ...patch }))} /></div>
       <div className="xl:col-span-2"><CodePanel project={project} /></div>
       <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} chip={chip} busy={workshopBusy} onChipChange={setChip} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onFlash={() => void workshopAction("flash")} onDeploy={() => void workshopAction("deploy")} /></div>

@@ -18,6 +18,7 @@ export interface PixelProject {
   brightness: number;
   frames: Frame[];
   frame_durations: number[];
+  frame_names: string[];
   loop: boolean;
   pin: number;
   pixel_order: PixelOrder;
@@ -91,7 +92,17 @@ export const sanitizeFrameDurations = (input: unknown, count: number, fps = 5): 
   });
 };
 
-export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [starterFrame(width, height)], frame_durations: [200], loop: true, pin: 2, pixel_order: "GRB", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
+export const defaultFrameName = (index: number) => `帧 ${String(index + 1).padStart(2, "0")}`;
+
+export const sanitizeFrameNames = (input: unknown, count: number): string[] => {
+  const values = Array.isArray(input) ? input : [];
+  return Array.from({ length: count }, (_, index) => {
+    const value = typeof values[index] === "string" ? values[index].trim().slice(0, 24) : "";
+    return value || defaultFrameName(index);
+  });
+};
+
+export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [emptyFrame(width, height)], frame_durations: [200], frame_names: [defaultFrameName(0)], loop: true, pin: 2, pixel_order: "GRB", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
 
 export const sanitizeFrame = (input: unknown, width: number, height: number): Frame => {
   const base = emptyFrame(width, height);
@@ -102,7 +113,7 @@ export const sanitizeFrame = (input: unknown, width: number, height: number): Fr
 export const sanitizeFrames = (input: unknown, width = 16, height = 8): Frame[] => {
   const frames = Array.isArray(input) ? input.slice(0, MAX_FRAMES) : [];
   const out = frames.map((frame) => sanitizeFrame(frame, width, height));
-  return out.length ? out : [starterFrame(width, height)];
+  return out.length ? out : [emptyFrame(width, height)];
 };
 
 const inferSize = (length: number, width?: number, height?: number) => {
@@ -119,11 +130,13 @@ export const parseProject = (raw: string): PixelProject => {
   const object = Array.isArray(data) ? {} : data;
   let rawFrames: unknown = Array.isArray(data) ? [data] : object.frames;
   let rawDurations: unknown = object.frame_durations;
+  let rawNames: unknown = object.frame_names;
   if (!rawFrames && Array.isArray(object.frame)) rawFrames = [object.frame];
   if (!rawFrames && Array.isArray(object.pixels)) rawFrames = [object.pixels];
   if (Array.isArray(rawFrames) && rawFrames.length && rawFrames[0] && typeof rawFrames[0] === "object" && !Array.isArray(rawFrames[0])) {
     const entries = rawFrames as Array<Record<string, unknown>>;
     rawDurations = entries.map((entry) => entry.duration_ms);
+    rawNames = entries.map((entry) => entry.name);
     rawFrames = entries.map((entry) => entry.pixels);
   }
   if (!Array.isArray(rawFrames) || !rawFrames.length || !Array.isArray(rawFrames[0])) throw new Error("没有找到像素帧数据");
@@ -145,6 +158,7 @@ export const parseProject = (raw: string): PixelProject => {
     brightness: Math.min(100, Math.max(1, Math.round(brightness))),
     frames: sanitized,
     frame_durations: sanitizeFrameDurations(rawDurations, sanitized.length, safeFps),
+    frame_names: sanitizeFrameNames(rawNames, sanitized.length),
     loop: object.loop !== false,
     pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : 2,
     pixel_order: (["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"].includes(String(object.pixel_order)) ? String(object.pixel_order) : "GRB") as PixelOrder,
@@ -189,6 +203,7 @@ export const toAnimationJson = (project: PixelProject) => ({
   version: 1, name: project.name, width: project.width, height: project.height, fps: project.fps,
   brightness: project.brightness / 100, loop: project.loop, format: "RGB565", module_width: 8, mapping: "module-row-major+internal-snake",
   frames: project.frames.map((frame, index) => ({
+    name: project.frame_names[index] ?? defaultFrameName(index),
     duration_ms: Math.max(MIN_FRAME_DURATION, project.frame_durations[index] ?? frameDurationForFps(project.fps)),
     pixels: sanitizeFrame(frame, project.width, project.height).map(hexToRgb565),
   })),
