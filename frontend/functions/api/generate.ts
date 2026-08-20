@@ -66,16 +66,31 @@ const validFrames = (value: unknown, width: number, height: number): value is Fr
 
 const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: number, height: number): Frame[] | null => {
   if (validFrames(value, width, height)) return value;
-  if (!Array.isArray(paletteValue) || paletteValue.length < 2 || paletteValue.length > 10) return null;
-  const palette = paletteValue.map((color) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null);
-  if (palette.some((color) => color === null) || !Array.isArray(value) || value.length < 1 || value.length > 32) return null;
+  const paletteSource = Array.isArray(paletteValue)
+    ? paletteValue
+    : paletteValue && typeof paletteValue === "object"
+      ? Object.entries(paletteValue as Record<string, unknown>).sort(([a], [b]) => Number(a) - Number(b)).map(([, color]) => color)
+      : [];
+  if (paletteSource.length < 2 || paletteSource.length > 10) return null;
+  const palette = paletteSource.map((entry) => {
+    const color = typeof entry === "string" ? entry : entry && typeof entry === "object" ? (entry as { color?: unknown; hex?: unknown }).color ?? (entry as { hex?: unknown }).hex : null;
+    return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null;
+  });
+  const frameSource = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value as Record<string, unknown>)
+      : [];
+  if (palette.some((color) => color === null) || frameSource.length < 1 || frameSource.length > 32) return null;
   const frames: Frame[] = [];
-  for (const rows of value) {
+  for (const entry of frameSource) {
+    const rows = Array.isArray(entry) ? entry : entry && typeof entry === "object" ? (entry as { rows?: unknown; grid?: unknown; pixels?: unknown }).rows ?? (entry as { grid?: unknown }).grid ?? (entry as { pixels?: unknown }).pixels : null;
     if (!Array.isArray(rows) || rows.length !== height) return null;
     const frame: Frame = [];
     for (const row of rows) {
-      if (typeof row !== "string" || row.length !== width) return null;
-      for (const symbol of row) {
+      const symbols = typeof row === "string" ? [...row.replace(/\s/g, "")] : Array.isArray(row) ? row : [];
+      if (symbols.length !== width) return null;
+      for (const symbol of symbols) {
         const index = Number(symbol);
         const color = Number.isInteger(index) ? palette[index] : null;
         if (!color) return null;
@@ -110,7 +125,7 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
         stream: false,
         messages: [
           { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
-          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, output_schema: { palette: ["#RRGGBB, index 0 is background", "up to 9 more colors"], frames: [`${height} strings per frame`, `each string is exactly ${width} digits`, "each digit is a palette index 0-9"] }, requirements: ["Match the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
+          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, exact_output_example: { palette: ["#07130F", "#FFFFFF", "#FFCB5C"], frames: [Array.from({ length: height }, () => "0".repeat(width))] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} digits`, "each digit is the zero-based palette index"], requirements: ["Replace the blank example with recognizable pixel art matching the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
         ],
       }),
     });
