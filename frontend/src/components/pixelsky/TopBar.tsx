@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, FolderOpen, Save, Sparkles } from "lucide-react";
+import { Code2, FileJson, FolderOpen, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CodeExportFormat } from "@/lib/codegen";
 
@@ -12,7 +12,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ name, onNameChange, onOpen, onSave, onExport }: TopBarProps) {
-  const [format, setFormat] = useState<CodeExportFormat>("json");
+  const [format, setFormat] = useState<Exclude<CodeExportFormat, "json">>("micropython");
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-4 lg:px-6">
@@ -45,14 +45,17 @@ export function TopBar({ name, onNameChange, onOpen, onSave, onExport }: TopBarP
             <Save className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">保存项目</span>
           </Button>
-          <select value={format} onChange={(event) => setFormat(event.target.value as CodeExportFormat)} aria-label="导出格式" className="h-9 max-w-36 rounded-md border border-border bg-background px-2 text-xs text-foreground">
-            <option value="json">动画 JSON</option>
+          <Button variant="outline" size="sm" onClick={() => onExport("json")}>
+            <FileJson className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">导出 JSON</span>
+          </Button>
+          <select value={format} onChange={(event) => setFormat(event.target.value as Exclude<CodeExportFormat, "json">)} aria-label="代码格式" className="h-9 max-w-40 rounded-md border border-ai/60 bg-ai/10 px-2 text-xs font-medium text-foreground outline-none focus:border-ai">
             <option value="micropython">MicroPython (.py)</option>
             <option value="arduino">Arduino (.ino)</option>
           </select>
-          <Button size="sm" onClick={() => onExport(format)}>
-            <Download className="h-3.5 w-3.5" />
-            导出
+          <Button size="sm" onClick={() => onExport(format)} className="bg-ai text-ai-foreground shadow-[0_0_18px_-6px_var(--ai)] hover:bg-ai/90">
+            <Code2 className="h-3.5 w-3.5" />
+            导出代码
           </Button>
         </div>
       </div>

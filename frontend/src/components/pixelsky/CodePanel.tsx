@@ -63,8 +63,8 @@ export function CodePanel({ project }: CodePanelProps) {
             <button type="button" onClick={() => setFile("animation")} className={`rounded px-3 py-1.5 font-mono text-[11px] ${file === "animation" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>animation.json</button>
             <button type="button" onClick={() => setFile("config")} className={`rounded px-3 py-1.5 font-mono text-[11px] ${file === "config" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>config.json</button>
             <button type="button" onClick={() => setFile("reference")} className={`rounded px-3 py-1.5 font-mono text-[11px] ${file === "reference" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>pixels.json</button>
-            <button type="button" onClick={() => setFile("micropython")} className={`rounded px-3 py-1.5 font-mono text-[11px] ${file === "micropython" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>main.py</button>
-            <button type="button" onClick={() => setFile("arduino")} className={`rounded px-3 py-1.5 font-mono text-[11px] ${file === "arduino" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>PixelSky.ino</button>
+            <button type="button" onClick={() => setFile("micropython")} className={`rounded border px-3 py-1.5 font-mono text-[11px] ${file === "micropython" ? "border-ai bg-ai text-ai-foreground" : "border-ai/30 bg-ai/10 text-ai"}`}>main.py</button>
+            <button type="button" onClick={() => setFile("arduino")} className={`rounded border px-3 py-1.5 font-mono text-[11px] ${file === "arduino" ? "border-ai bg-ai text-ai-foreground" : "border-ai/30 bg-ai/10 text-ai"}`}>PixelSky.ino</button>
           </div>
           <Button variant="outline" size="sm" onClick={() => void copy()}>{copied ? <Check /> : <Clipboard />}{copied ? "已复制" : "复制"}</Button>
           <Button size="sm" onClick={download}><Download />下载{isCode ? "代码" : ""}</Button>
