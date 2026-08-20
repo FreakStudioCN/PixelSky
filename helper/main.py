@@ -192,12 +192,20 @@ async def flash_firmware(port: str = Form(...), chip: Literal['esp32', 'esp32s2'
     return {'ok': True, 'message': 'MicroPython 固件烧录完成', 'chip': chip, 'offset': offset, 'log': (erase + '\n' + flash)[-3000:]}
 
 def remote(data: GenerateRequest):
-    base = os.getenv('PIXELSKY_AI_BASE_URL', '').rstrip('/')
-    key = os.getenv('PIXELSKY_AI_API_KEY', '')
-    if not base or not key:
+    base = os.getenv('PIXELSKY_AI_BASE_URL', 'https://api.deepseek.com').rstrip('/')
+    key = os.getenv('DEEPSEEK_API_KEY') or os.getenv('PIXELSKY_AI_API_KEY', '')
+    if not key:
         return None
     spec = {'prompt': data.prompt, 'width': data.width, 'height': data.height, 'max_frames': 32, 'instruction': f'Return JSON only: {{frames: string[frame][{data.width * data.height}]}}, colors are #RRGGBB.'}
-    body = {'model': os.getenv('PIXELSKY_AI_MODEL', 'gpt-4.1-mini'), 'messages': [{'role': 'user', 'content': json.dumps(spec, ensure_ascii=False)}], 'response_format': {'type': 'json_object'}}
+    body = {
+        'model': os.getenv('DEEPSEEK_MODEL') or os.getenv('PIXELSKY_AI_MODEL', 'deepseek-v4-flash'),
+        'messages': [
+            {'role': 'system', 'content': 'You design tiny LED pixel animations. Always return one valid JSON object and no Markdown.'},
+            {'role': 'user', 'content': json.dumps(spec, ensure_ascii=False)},
+        ],
+        'response_format': {'type': 'json_object'},
+        'stream': False,
+    }
     request = urllib.request.Request(base + '/chat/completions', data=json.dumps(body).encode(), headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
@@ -209,6 +217,6 @@ def remote(data: GenerateRequest):
 @app.post('/api/generate')
 def generate(data: GenerateRequest):
     frames = remote(data)
-    source = 'api' if frames else 'fallback'
+    source = 'deepseek' if frames else 'fallback'
     frames = frames or fallback_frames(data.prompt, width=data.width, height=data.height)
     return {'source': source, 'project': {'version': 1, 'name': 'AI 创意', 'width': data.width, 'height': data.height, 'fps': data.fps, 'brightness': data.brightness, 'loop': True, 'frame_durations': [max(100, round(1000 / data.fps)) for _ in frames], 'frames': frames}}

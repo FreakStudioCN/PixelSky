@@ -1,4 +1,6 @@
 interface Env {
+  DEEPSEEK_API_KEY?: string;
+  DEEPSEEK_MODEL?: string;
   PIXELSKY_AI_BASE_URL?: string;
   PIXELSKY_AI_API_KEY?: string;
   PIXELSKY_AI_MODEL?: string;
@@ -44,19 +46,37 @@ function fallbackFrames(prompt: string, width: number, height: number): Frame[] 
 
 const validFrames = (value: unknown, width: number, height: number): value is Frame[] => Array.isArray(value) && value.length > 0 && value.length <= 32 && value.every((frame) => Array.isArray(frame) && frame.length === width * height && frame.every((color) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)));
 
-async function remoteFrames(env: Env, prompt: string, width: number, height: number): Promise<Frame[] | null> {
-  if (!env.PIXELSKY_AI_BASE_URL || !env.PIXELSKY_AI_API_KEY) return null;
+type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
+
+const parseModelJson = (content: string): unknown => JSON.parse(
+  content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""),
+);
+
+async function remoteFrames(env: Env, prompt: string, width: number, height: number): Promise<RemoteResult> {
+  const apiKey = env.DEEPSEEK_API_KEY || env.PIXELSKY_AI_API_KEY;
+  if (!apiKey) return { frames: null, status: "not_configured" };
+  const baseUrl = (env.PIXELSKY_AI_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
   try {
-    const response = await fetch(`${env.PIXELSKY_AI_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${env.PIXELSKY_AI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: env.PIXELSKY_AI_MODEL || "gpt-4.1-mini", response_format: { type: "json_object" }, messages: [{ role: "user", content: JSON.stringify({ prompt, width, height, max_frames: 32, instruction: `Return JSON only: {frames: string[frame][${width * height}]}; every color is #RRGGBB.` }) }] }),
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-flash",
+        response_format: { type: "json_object" },
+        stream: false,
+        messages: [
+          { role: "system", content: "You design tiny LED pixel animations. Always return one valid JSON object and no Markdown." },
+          { role: "user", content: JSON.stringify({ prompt, width, height, max_frames: 32, instruction: `Return JSON only as {\"frames\": string[frame][${width * height}]}. Use 1 to 8 frames. Every color must be #RRGGBB. Each flat frame is row-major from top-left.` }) },
+        ],
+      }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { frames: null, status: "request_failed" };
     const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const parsed = JSON.parse(payload.choices?.[0]?.message?.content || "{}") as { frames?: unknown };
-    return validFrames(parsed.frames, width, height) ? parsed.frames : null;
-  } catch { return null; }
+    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as { frames?: unknown };
+    return validFrames(parsed.frames, width, height)
+      ? { frames: parsed.frames, status: "ok" }
+      : { frames: null, status: "invalid_response" };
+  } catch { return { frames: null, status: "request_failed" }; }
 }
 
 export const onRequestPost = async ({ request, env }: Context) => {
@@ -71,7 +91,7 @@ export const onRequestPost = async ({ request, env }: Context) => {
   if (!prompt) return json({ detail: "请输入创意描述" }, 422);
   if (!SIZES.has(`${width}x${height}`)) return json({ detail: "仅支持 8×8、16×8 或 16×16" }, 422);
   const remote = await remoteFrames(env, prompt, width, height);
-  const frames = remote || fallbackFrames(prompt, width, height);
+  const frames = remote.frames || fallbackFrames(prompt, width, height);
   const duration = Math.max(100, Math.round(1000 / fps));
-  return json({ source: remote ? "api" : "fallback", project: { version: 1, name: "AI 创意", width, height, fps, brightness, frames, frame_durations: frames.map(() => duration), loop: true } });
+  return json({ source: remote.frames ? "deepseek" : "fallback", provider_status: remote.status, project: { version: 1, name: "AI 创意", width, height, fps, brightness, frames, frame_durations: frames.map(() => duration), loop: true } });
 };

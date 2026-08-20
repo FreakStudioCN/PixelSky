@@ -30,7 +30,14 @@ npm run build
 npx wrangler pages deploy dist --project-name pixelsky --branch main
 ```
 
-云端动画生成在没有模型密钥时使用内置模板。需要接入兼容 Chat Completions 的模型时，可在 Cloudflare 项目中配置 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY` 和 `PIXELSKY_AI_MODEL`。
+云端动画生成使用 DeepSeek Chat Completions；没有密钥或接口暂时不可用时自动使用内置模板。密钥只写入 Cloudflare Secret，不提交到仓库：
+
+```powershell
+cd frontend
+npx wrangler pages secret put DEEPSEEK_API_KEY --project-name pixelsky
+```
+
+默认模型为 `deepseek-v4-flash`，可用 `DEEPSEEK_MODEL` 覆盖。本地 Helper 使用同名环境变量，也兼容原有的 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY` 和 `PIXELSKY_AI_MODEL`。
 
 ## 技术依据
 
@@ -40,7 +47,7 @@ npx wrangler pages deploy dist --project-name pixelsky --branch main
 - esptool：https://docs.espressif.com/projects/esptool/
 - mpremote：https://docs.micropython.org/en/latest/reference/mpremote.html
 
-可选 AI 环境变量：`PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY`、`PIXELSKY_AI_MODEL`，接口需兼容 Chat Completions。
+AI 环境变量：`DEEPSEEK_API_KEY`；可选 `DEEPSEEK_MODEL`。高级兼容配置仍支持 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY`、`PIXELSKY_AI_MODEL`。
 
 硬件默认 GPIO2、GRB、逐行蛇形、亮度 0.2。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地。
 
