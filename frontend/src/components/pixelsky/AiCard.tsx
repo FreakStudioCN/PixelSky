@@ -56,7 +56,7 @@ export function AiCard({ prompt, onPromptChange, onGenerate, loading, listening,
         {loading ? "生成中…" : "生成像素动画"}
       </Button>
       <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-        生成由本地 Helper 处理，结果会直接替换当前所有帧。
+        生成由 DeepSeek 云端处理，结果会直接替换当前所有帧。
       </p>
     </section>
   );

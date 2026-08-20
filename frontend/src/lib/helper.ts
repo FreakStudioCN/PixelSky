@@ -2,12 +2,16 @@ import type { PixelProject } from "./pixel";
 
 export const HELPER_BASE = "http://127.0.0.1:8765";
 
-const TIMEOUT = 8000;
-const CLOUD_BASE = typeof window !== "undefined" && window.location.protocol === "https:" ? "" : HELPER_BASE;
+const HELPER_TIMEOUT = 8000;
+const AI_TIMEOUT = 60000;
+const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
+const CLOUD_BASE = currentHost === "pixelsky.pages.dev" || currentHost.endsWith(".pixelsky.pages.dev")
+  ? ""
+  : "https://pixelsky.pages.dev";
 
-async function request<T>(path: string, init?: RequestInit, base = HELPER_BASE): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, base = HELPER_BASE, timeout = HELPER_TIMEOUT, service = "本地 Helper"): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT);
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const res = await fetch(`${base}${path}`, {
       ...init,
@@ -26,10 +30,10 @@ async function request<T>(path: string, init?: RequestInit, base = HELPER_BASE):
     return body as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("本地 Helper 响应超时");
+      throw new Error(`${service} 响应超时`);
     }
     if (error instanceof TypeError) {
-      throw new Error("无法连接本地 Helper（127.0.0.1:8765）");
+      throw new Error(service === "DeepSeek 云端服务" ? "无法连接 DeepSeek 云端服务" : "无法连接本地 Helper（127.0.0.1:8765）");
     }
     throw error;
   } finally {
@@ -53,7 +57,7 @@ export const generateAnimation = (body: { prompt: string; width: number; height:
   request<{ project?: Partial<PixelProject> }>("/api/generate", {
     method: "POST",
     body: JSON.stringify({ ...body, brightness: body.brightness / 100 }),
-  }, CLOUD_BASE);
+  }, CLOUD_BASE, AI_TIMEOUT, "DeepSeek 云端服务");
 
 export const uploadRuntime = (body: { port: string; project: PixelProject }) =>
   request<{ message?: string }>("/api/upload-runtime", { method: "POST", body: JSON.stringify({ ...body, project: { ...body.project, brightness: body.project.brightness / 100 } }) });

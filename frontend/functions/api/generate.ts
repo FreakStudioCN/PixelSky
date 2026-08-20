@@ -20,7 +20,12 @@ type Frame = string[];
 const SIZES = new Set(["8x8", "16x8", "16x16"]);
 const COLORS = { bg: "#07130F", mint: "#31F5C3", purple: "#9B7BFF", pink: "#FF5A9D", yellow: "#FFCB5C", blue: "#52B7FF", white: "#FFFFFF" };
 
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", ...corsHeaders } });
 const empty = (width: number, height: number): Frame => Array.from({ length: width * height }, () => COLORS.bg);
 const setPixel = (frame: Frame, width: number, height: number, x: number, y: number, color: string) => {
   if (x >= 0 && x < width && y >= 0 && y < height) frame[y * width + x] = color;
@@ -95,3 +100,5 @@ export const onRequestPost = async ({ request, env }: Context) => {
   const duration = Math.max(100, Math.round(1000 / fps));
   return json({ source: remote.frames ? "deepseek" : "fallback", provider_status: remote.status, project: { version: 1, name: "AI 创意", width, height, fps, brightness, frames, frame_durations: frames.map(() => duration), loop: true } });
 };
+
+export const onRequestOptions = async () => new Response(null, { status: 204, headers: corsHeaders });
