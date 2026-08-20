@@ -61,17 +61,20 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
   const apiKey = env.DEEPSEEK_API_KEY || env.PIXELSKY_AI_API_KEY;
   if (!apiKey) return { frames: null, status: "not_configured" };
   const baseUrl = (env.PIXELSKY_AI_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
+  const maxGeneratedFrames = width * height <= 64 ? 6 : width * height <= 128 ? 4 : 2;
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
+      signal: AbortSignal.timeout(40000),
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-flash",
         response_format: { type: "json_object" },
+        max_tokens: 8000,
         stream: false,
         messages: [
           { role: "system", content: "You design tiny LED pixel animations. Always return one valid JSON object and no Markdown." },
-          { role: "user", content: JSON.stringify({ prompt, width, height, max_frames: 32, instruction: `Return JSON only as {\"frames\": string[frame][${width * height}]}. Use 1 to 8 frames. Every color must be #RRGGBB. Each flat frame is row-major from top-left.` }) },
+          { role: "user", content: JSON.stringify({ prompt, width, height, max_frames: maxGeneratedFrames, instruction: `Return JSON only as {\"frames\": string[frame][${width * height}]}. Use 1 to ${maxGeneratedFrames} frames. Every color must be #RRGGBB. Each flat frame is row-major from top-left.` }) },
         ],
       }),
     });

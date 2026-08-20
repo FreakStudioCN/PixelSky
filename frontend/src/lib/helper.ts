@@ -3,7 +3,7 @@ import type { PixelProject } from "./pixel";
 export const HELPER_BASE = "http://127.0.0.1:8765";
 
 const HELPER_TIMEOUT = 8000;
-const AI_TIMEOUT = 60000;
+const AI_TIMEOUT = 75000;
 const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
 const CLOUD_BASE = currentHost === "pixelsky.pages.dev" || currentHost.endsWith(".pixelsky.pages.dev")
   ? ""
