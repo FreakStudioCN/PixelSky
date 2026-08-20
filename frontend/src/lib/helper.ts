@@ -1,0 +1,88 @@
+import type { PixelProject } from "./pixel";
+
+export const HELPER_BASE = "http://127.0.0.1:8765";
+
+const TIMEOUT = 8000;
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT);
+  try {
+    const res = await fetch(`${HELPER_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    });
+    const text = await res.text();
+    const body = text ? (JSON.parse(text) as unknown) : {};
+    if (!res.ok) {
+      const message =
+        (body as { error?: string; message?: string }).error ??
+        (body as { message?: string }).message ??
+        `请求失败 (${res.status})`;
+      throw new Error(message);
+    }
+    return body as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("本地 Helper 响应超时");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("无法连接本地 Helper（127.0.0.1:8765）");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const getHealth = () => request<{ status?: string; version?: string }>("/health");
+
+export const getPorts = async (): Promise<string[]> => {
+  const data = await request<{ ports?: unknown }>("/api/ports");
+  const raw = Array.isArray(data.ports) ? data.ports : Array.isArray(data) ? data : [];
+  return raw
+    .map((p) =>
+      typeof p === "string" ? p : ((p as { device?: string; port?: string })?.device ?? (p as { port?: string })?.port),
+    )
+    .filter((p): p is string => Boolean(p));
+};
+
+export const generateAnimation = (body: { prompt: string; width: number; height: number; fps: number; brightness: number }) =>
+  request<{ project?: Partial<PixelProject> }>("/api/generate", {
+    method: "POST",
+    body: JSON.stringify({ ...body, brightness: body.brightness / 100 }),
+  });
+
+export const uploadRuntime = (body: { port: string; project: PixelProject }) =>
+  request<{ message?: string }>("/api/upload-runtime", { method: "POST", body: JSON.stringify({ ...body, project: { ...body.project, brightness: body.project.brightness / 100 } }) });
+
+export const uploadAnimation = (body: { port: string; project: PixelProject }) =>
+  request<{ message?: string }>("/api/upload-animation", { method: "POST", body: JSON.stringify({ ...body, project: { ...body.project, brightness: body.project.brightness / 100 } }) });
+
+export interface DeviceCheck {
+  ok: boolean;
+  micropython: string;
+  machine: string;
+  free_memory: number;
+  free_storage: number;
+  checks: Record<string, boolean>;
+}
+
+export const checkDevice = (port: string) => request<DeviceCheck>("/api/device-check", { method: "POST", body: JSON.stringify({ port }) });
+export const testLeds = (port: string, count: number) => request<{ message?: string }>("/api/led-test", { method: "POST", body: JSON.stringify({ port, pin: 2, count }) });
+
+export const flashFirmware = async (port: string, firmware: File, chip: "esp32" | "esp32s2" | "esp32s3" | "esp32c3") => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 240_000);
+  try {
+    const form = new FormData(); form.append("port", port); form.append("chip", chip); form.append("firmware", firmware);
+    const response = await fetch(`${HELPER_BASE}/api/flash-firmware`, { method: "POST", body: form, signal: controller.signal });
+    const body = await response.json() as { message?: string; detail?: string; log?: string };
+    if (!response.ok) throw new Error(body.detail ?? "固件烧录失败");
+    return body;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw new Error("固件烧录超时");
+    throw error;
+  } finally { window.clearTimeout(timer); }
+};

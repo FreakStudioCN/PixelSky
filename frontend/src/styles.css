@@ -1,0 +1,140 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * PixelSky design system — premium dark creative tool.
+ * Deep forest/charcoal surfaces, mint neon primary, purple AI accent.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-grid: var(--grid);
+  --color-ai: var(--ai);
+  --color-ai-foreground: var(--ai-foreground);
+  --color-warn: var(--warn);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-display: "Space Grotesk", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-sans: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent),
+    0 12px 40px -18px color-mix(in oklab, var(--primary) 55%, transparent);
+  --shadow-panel: 0 24px 60px -34px oklch(0 0 0 / 0.9);
+}
+
+:root {
+  --radius: 0.5rem;
+  /* #06100d */
+  --background: oklch(0.163 0.017 165);
+  --foreground: oklch(0.95 0.012 165);
+  --surface: oklch(0.203 0.019 165);
+  --surface-raised: oklch(0.242 0.021 166);
+  --card: oklch(0.204 0.019 165);
+  --card-foreground: oklch(0.95 0.012 165);
+  --popover: oklch(0.216 0.02 165);
+  --popover-foreground: oklch(0.95 0.012 165);
+  /* #31f5c3 */
+  --primary: oklch(0.876 0.164 174);
+  --primary-foreground: oklch(0.19 0.03 170);
+  --secondary: oklch(0.262 0.021 166);
+  --secondary-foreground: oklch(0.93 0.012 165);
+  --muted: oklch(0.252 0.018 166);
+  --muted-foreground: oklch(0.688 0.024 168);
+  --accent: oklch(0.29 0.03 168);
+  --accent-foreground: oklch(0.95 0.012 165);
+  --ai: oklch(0.68 0.19 300);
+  --ai-foreground: oklch(0.97 0.01 300);
+  --warn: oklch(0.8 0.15 80);
+  --destructive: oklch(0.63 0.2 22);
+  --destructive-foreground: oklch(0.98 0.005 20);
+  --border: oklch(0.31 0.021 167);
+  --input: oklch(0.31 0.021 167);
+  --grid: oklch(0.28 0.02 167);
+  --ring: oklch(0.876 0.164 174);
+  --sidebar: oklch(0.19 0.018 165);
+  --sidebar-foreground: oklch(0.95 0.012 165);
+  --sidebar-primary: oklch(0.876 0.164 174);
+  --sidebar-primary-foreground: oklch(0.19 0.03 170);
+  --sidebar-accent: oklch(0.262 0.021 166);
+  --sidebar-accent-foreground: oklch(0.95 0.012 165);
+  --sidebar-border: oklch(0.31 0.021 167);
+  --sidebar-ring: oklch(0.876 0.164 174);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+}
+
+@utility panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-panel);
+}
+
+@utility panel-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+@utility glow-ring {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility dot-live {
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 22%, transparent);
+}
