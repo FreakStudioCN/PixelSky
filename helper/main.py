@@ -18,7 +18,20 @@ from core import fallback_frames, hex_to_rgb565, validate_frames, validate_size
 ROOT = Path(__file__).resolve().parents[1]
 DEVICE = ROOT / 'device'
 app = FastAPI(title='PixelSky Local Helper', version='0.4.0')
-app.add_middleware(CORSMiddleware, allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173'], allow_methods=['GET', 'POST'], allow_headers=['*'])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173', 'https://pixelsky.pages.dev'],
+    allow_origin_regex=r'https://([a-z0-9-]+\.)?pixelsky\.pages\.dev',
+    allow_methods=['GET', 'POST'],
+    allow_headers=['*'],
+)
+
+@app.middleware('http')
+async def allow_local_device_bridge(request, call_next):
+    response = await call_next(request)
+    if request.headers.get('access-control-request-private-network') == 'true':
+        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    return response
 
 class Project(BaseModel):
     version: int = 1
