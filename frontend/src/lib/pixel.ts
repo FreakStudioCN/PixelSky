@@ -148,7 +148,9 @@ export const parseProject = (raw: string): PixelProject => {
   const converted = numeric ? (rawFrames as number[][]).map((frame) => frame.map(rgb565ToHex)) : rawFrames;
   const fps = Number(object.fps);
   const rawBrightness = Number(object.brightness);
-  const brightness = Number.isFinite(rawBrightness) ? (rawBrightness <= 1 ? rawBrightness * 100 : rawBrightness) : 20;
+  const brightness = Number.isFinite(rawBrightness)
+    ? (object.brightness_scale === "safe-20-percent" ? rawBrightness * 500 : rawBrightness <= 1 ? rawBrightness * 100 : rawBrightness)
+    : 20;
   const sanitized = sanitizeFrames(converted, size.width, size.height);
   const safeFps = Number.isFinite(fps) ? Math.min(10, Math.max(1, Math.round(fps))) : 5;
   return {
@@ -206,7 +208,7 @@ export const mappedHardwareIndex = (x: number, y: number, project: Pick<PixelPro
 
 export const toAnimationJson = (project: PixelProject) => ({
   version: 1, name: project.name, width: project.width, height: project.height, fps: project.fps,
-  brightness: project.brightness / 100, loop: project.loop, format: "RGB565", module_width: 8, mapping: project.matrix_layout,
+  brightness: project.brightness / 500, brightness_scale: "safe-20-percent", loop: project.loop, format: "RGB565", module_width: 8, mapping: project.matrix_layout,
   frames: project.frames.map((frame, index) => ({
     name: project.frame_names[index] ?? defaultFrameName(index),
     duration_ms: Math.max(MIN_FRAME_DURATION, project.frame_durations[index] ?? frameDurationForFps(project.fps)),

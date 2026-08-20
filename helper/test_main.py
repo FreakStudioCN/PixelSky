@@ -23,7 +23,7 @@ class MainTests(unittest.TestCase):
         project = self.project()
         data = animation(project)
         self.assertTrue(data['loop'])
-        self.assertEqual(data['brightness'], .2)
+        self.assertAlmostEqual(data['brightness'], .04)
         self.assertEqual(data['frames'][0]['name'], '帧 01')
         self.assertEqual(data['frames'][0]['duration_ms'], 200)
         self.assertEqual(len(data['frames'][0]['pixels']), 64)
@@ -31,7 +31,7 @@ class MainTests(unittest.TestCase):
     def test_animation_keeps_frame_names_and_limits_brightness(self):
         project = Project(width=8, height=8, brightness=.8, frames=[['#ffffff'] * 64], frame_names=['眨眼'])
         data = animation(project)
-        self.assertEqual(data['brightness'], .2)
+        self.assertAlmostEqual(data['brightness'], .16)
         self.assertEqual(data['frames'][0]['name'], '眨眼')
 
     def test_minimum_frame_duration(self):

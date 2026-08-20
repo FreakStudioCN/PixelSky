@@ -35,10 +35,11 @@ def run():
     if (width, height) not in ((8, 8), (16, 8), (16, 16)):
         raise ValueError("unsupported PixelSky matrix size")
 
+    # JSON-only updates must be able to change brightness without redeploying
+    # config. The animation value is authoritative but remains capped at 20%.
     safe_brightness = min(
         0.2,
-        max(0.0, _number(config.get("brightness", 0.2), 0.2)),
-        max(0.0, _number(animation.get("brightness", 0.2), 0.2)),
+        max(0.0, _number(animation.get("brightness", config.get("brightness", 0.04)), 0.04)),
     )
     matrix = NeoPixelMatrix(
         width=width,

@@ -27,7 +27,8 @@ export function CodePanel({ project }: CodePanelProps) {
     r_balance: project.r_balance,
     g_balance: project.g_balance,
     b_balance: project.b_balance,
-    brightness: project.brightness / 100,
+    brightness: project.brightness / 500,
+    brightness_scale: "safe-20-percent",
     fps: project.fps,
   }), [project]);
   const value = file === "animation" ? animation : file === "config" ? config : reference;
