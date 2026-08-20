@@ -10,3 +10,4 @@ node.zip
 __pycache__/
 *.pyc
 .env
+firmware/*.bin

@@ -1,5 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
-import type { PixelOrder, PixelProject } from "@/lib/pixel";
+import type { MatrixLayout, PixelOrder, PixelProject } from "@/lib/pixel";
 
 interface HardwareSettingsCardProps { project: PixelProject; onChange: (patch: Partial<PixelProject>) => void }
 const ORDERS: PixelOrder[] = ["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"];
@@ -11,6 +11,7 @@ export function HardwareSettingsCard({ project, onChange }: HardwareSettingsCard
     <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <label className="grid gap-1 text-[10px] text-muted-foreground">GPIO<input type="number" min="0" max="48" value={project.pin} onChange={(event) => onChange({ pin: Number(event.target.value) })} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground" /></label>
       <label className="grid gap-1 text-[10px] text-muted-foreground">颜色顺序<select value={project.pixel_order} onChange={(event) => onChange({ pixel_order: event.target.value as PixelOrder })} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground">{ORDERS.map((order) => <option key={order}>{order}</option>)}</select></label>
+      <label className="grid gap-1 text-[10px] text-muted-foreground">矩阵走线<select value={project.matrix_layout} onChange={(event) => onChange({ matrix_layout: event.target.value as MatrixLayout })} className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground"><option value="column-major-rtl">右起逐列（当前板）</option><option value="row-serpentine">逐行蛇形</option></select></label>
       <label className="grid gap-1 text-[10px] text-muted-foreground">旋转<select value={project.rotate} onChange={(event) => onChange({ rotate: Number(event.target.value) as 0 | 90 | 180 | 270 })} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
       <div className="grid grid-cols-2 gap-2 pt-4"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={project.flip_h} onChange={(event) => onChange({ flip_h: event.target.checked })} />水平翻转</label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={project.flip_v} onChange={(event) => onChange({ flip_v: event.target.checked })} />垂直翻转</label></div>
     </div>

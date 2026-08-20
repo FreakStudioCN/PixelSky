@@ -46,6 +46,7 @@ class Project(BaseModel):
     loop: bool = True
     pin: int = Field(default=2, ge=0, le=48)
     pixel_order: Literal['RGB', 'GRB', 'BGR', 'BRG', 'RBG', 'GBR'] = 'GRB'
+    matrix_layout: Literal['column-major-rtl', 'row-serpentine'] = 'column-major-rtl'
     flip_h: bool = False
     flip_v: bool = False
     rotate: Literal[0, 90, 180, 270] = 0
@@ -87,10 +88,10 @@ class GenerateRequest(BaseModel):
         return self
 
 def animation(project: Project):
-    return {'version': 1, 'width': project.width, 'height': project.height, 'fps': project.fps, 'brightness': min(.2, project.brightness), 'loop': project.loop, 'format': 'RGB565', 'module_width': 8, 'mapping': 'module-row-major+internal-snake', 'frames': [{'name': project.frame_names[index], 'duration_ms': project.frame_durations[index], 'pixels': [hex_to_rgb565(color) for color in frame]} for index, frame in enumerate(project.frames)]}
+    return {'version': 1, 'width': project.width, 'height': project.height, 'fps': project.fps, 'brightness': min(.2, project.brightness), 'loop': project.loop, 'format': 'RGB565', 'module_width': 8, 'mapping': project.matrix_layout, 'frames': [{'name': project.frame_names[index], 'duration_ms': project.frame_durations[index], 'pixels': [hex_to_rgb565(color) for color in frame]} for index, frame in enumerate(project.frames)]}
 
 def config(project: Project):
-    return {'width': project.width, 'height': project.height, 'pin': project.pin, 'pixel_order': project.pixel_order, 'snake': True, 'module_width': 8, 'module_order': 'row-major', 'flip_h': project.flip_h, 'flip_v': project.flip_v, 'rotate': project.rotate, 'gamma': project.gamma, 'r_balance': project.r_balance, 'g_balance': project.g_balance, 'b_balance': project.b_balance, 'brightness': project.brightness, 'fps': project.fps}
+    return {'width': project.width, 'height': project.height, 'pin': project.pin, 'pixel_order': project.pixel_order, 'matrix_layout': project.matrix_layout, 'module_width': 8, 'module_order': 'row-major', 'flip_h': project.flip_h, 'flip_v': project.flip_v, 'rotate': project.rotate, 'gamma': project.gamma, 'r_balance': project.r_balance, 'g_balance': project.g_balance, 'b_balance': project.b_balance, 'brightness': project.brightness, 'fps': project.fps}
 
 def available_ports():
     return {port.device: port for port in serial.tools.list_ports.comports()}
@@ -138,7 +139,7 @@ def write_runtime(port: str, project: Project):
 
 @app.get('/health')
 def health():
-    return {'ok': True, 'service': 'pixelsky-helper', 'version': '0.4.0', 'features': ['flash', 'multi-chip', 'preflight', 'led-test', 'dynamic-canvas', 'matrix-calibration', 'frame-duration', 'frame-reorder']}
+    return {'ok': True, 'service': 'pixelsky-helper', 'version': '0.5.0', 'features': ['flash', 'multi-chip', 'preflight', 'led-test', 'dynamic-canvas', 'matrix-calibration', 'matrix-layout', 'frame-duration', 'frame-reorder']}
 
 @app.get('/api/ports')
 def ports():

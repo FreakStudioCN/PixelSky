@@ -16,14 +16,14 @@ class Tests(unittest.TestCase):
             self.assertEqual(validate_frames(frames, width, height), frames)
 
     def test_module_mapping(self):
-        self.assertEqual(hardware_index(0, 0, 16), 0)
-        self.assertEqual(hardware_index(7, 0, 16), 7)
-        self.assertEqual(hardware_index(0, 1, 16), 15)
-        self.assertEqual(hardware_index(8, 0, 16), 64)
-        self.assertEqual(hardware_index(15, 1, 16), 72)
-        self.assertEqual(hardware_index(0, 8, 16), 128)
-        self.assertEqual(mapped_hardware_index(0, 0, 16, 8, flip_h=True), 71)
-        self.assertEqual(mapped_hardware_index(0, 0, 8, 8, rotate=90), 7)
+        self.assertEqual(hardware_index(7, 0, 16), 0)
+        self.assertEqual(hardware_index(7, 7, 16), 7)
+        self.assertEqual(hardware_index(6, 0, 16), 8)
+        self.assertEqual(hardware_index(15, 0, 16), 64)
+        self.assertEqual(hardware_index(14, 0, 16), 72)
+        self.assertEqual(hardware_index(0, 8, 16), 184)
+        self.assertEqual(mapped_hardware_index(0, 0, 16, 8, flip_h=True), 64)
+        self.assertEqual(mapped_hardware_index(0, 0, 8, 8, rotate=90), 0)
 
     def test_invalid(self):
         with self.assertRaises(ValueError):

@@ -9,21 +9,28 @@ def rgb565_to_rgb888(value):
     return (r5 * 255 // 31, g6 * 255 // 63, b5 * 255 // 31)
 
 
-def physical_index(x, y, width, module_width=8, snake=True):
-    """Map a coordinate to row-major modules with an internal snake layout."""
+def physical_index(x, y, width, module_width=8, layout="column-major-rtl"):
+    """Map a coordinate to the selected wiring layout inside each module."""
     module_x = x // module_width
     module_y = y // module_width
     modules_per_row = (width + module_width - 1) // module_width
     local_x = x % module_width
     local_y = y % module_width
     module_index = module_y * modules_per_row + module_x
-    if snake and local_y % 2:
-        local_x = module_width - 1 - local_x
-    return module_index * module_width * module_width + local_y * module_width + local_x
+    if layout == "row-serpentine":
+        if local_y % 2:
+            local_x = module_width - 1 - local_x
+        module_pixel = local_y * module_width + local_x
+    else:
+        # The target 8x8 board starts at its top-right LED and runs down
+        # each column before continuing with the column to its left.
+        module_pixel = (module_width - 1 - local_x) * module_width + local_y
+    return module_index * module_width * module_width + module_pixel
 
 
 class NeoPixelMatrix:
-    def __init__(self, width, height, pin=2, module_width=8, snake=True,
+    def __init__(self, width, height, pin=2, module_width=8,
+                 layout="column-major-rtl",
                  pixel_order="GRB", brightness=0.2, flip_h=False,
                  flip_v=False, rotate=0, gamma=1.0,
                  r_balance=1.0, g_balance=1.0, b_balance=1.0):
@@ -34,7 +41,7 @@ class NeoPixelMatrix:
         self.height = int(height)
         self.count = self.width * self.height
         self.module_width = int(module_width)
-        self.snake = bool(snake)
+        self.layout = layout if layout in ("column-major-rtl", "row-serpentine") else "column-major-rtl"
         self.flip_h = bool(flip_h)
         self.flip_v = bool(flip_v)
         self.rotate = int(rotate) if int(rotate) in (0, 90, 180, 270) else 0
@@ -81,7 +88,7 @@ class NeoPixelMatrix:
             x = logical_index % self.width
             y = logical_index // self.width
             px, py, physical_width = self._transform(x, y)
-            index = physical_index(px, py, physical_width, self.module_width, self.snake)
+            index = physical_index(px, py, physical_width, self.module_width, self.layout)
             if 0 <= index < self.count:
                 self.pixels[index] = self._correct(rgb565_to_rgb888(value))
         self.pixels.write()

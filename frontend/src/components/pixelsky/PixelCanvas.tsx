@@ -8,7 +8,7 @@ interface PixelCanvasProps {
   height: number;
   viewMode: ViewMode;
   readOnly?: boolean;
-  hardware: Pick<PixelProject, "width" | "height" | "flip_h" | "flip_v" | "rotate">;
+  hardware: Pick<PixelProject, "width" | "height" | "matrix_layout" | "flip_h" | "flip_v" | "rotate">;
   onPaint: (index: number) => void;
   onStrokeStart: () => void;
   onStrokeEnd: () => void;

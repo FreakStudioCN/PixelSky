@@ -7,6 +7,7 @@ export type Frame = string[];
 export type CanvasPreset = "8x8" | "16x8" | "16x16";
 export type ViewMode = "creative" | "hardware";
 export type PixelOrder = "RGB" | "GRB" | "BGR" | "BRG" | "RBG" | "GBR";
+export type MatrixLayout = "column-major-rtl" | "row-serpentine";
 export type EspChip = "esp32" | "esp32s2" | "esp32s3" | "esp32c3";
 
 export interface PixelProject {
@@ -22,6 +23,7 @@ export interface PixelProject {
   loop: boolean;
   pin: number;
   pixel_order: PixelOrder;
+  matrix_layout: MatrixLayout;
   flip_h: boolean;
   flip_v: boolean;
   rotate: 0 | 90 | 180 | 270;
@@ -102,7 +104,7 @@ export const sanitizeFrameNames = (input: unknown, count: number): string[] => {
   });
 };
 
-export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [emptyFrame(width, height)], frame_durations: [200], frame_names: [defaultFrameName(0)], loop: true, pin: 2, pixel_order: "GRB", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
+export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [emptyFrame(width, height)], frame_durations: [200], frame_names: [defaultFrameName(0)], loop: true, pin: 2, pixel_order: "GRB", matrix_layout: "column-major-rtl", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
 
 export const sanitizeFrame = (input: unknown, width: number, height: number): Frame => {
   const base = emptyFrame(width, height);
@@ -162,6 +164,7 @@ export const parseProject = (raw: string): PixelProject => {
     loop: object.loop !== false,
     pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : 2,
     pixel_order: (["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"].includes(String(object.pixel_order)) ? String(object.pixel_order) : "GRB") as PixelOrder,
+    matrix_layout: (object.matrix_layout === "row-serpentine" ? "row-serpentine" : "column-major-rtl") as MatrixLayout,
     flip_h: Boolean(object.flip_h),
     flip_v: Boolean(object.flip_v),
     rotate: ([0, 90, 180, 270].includes(Number(object.rotate)) ? Number(object.rotate) : 0) as 0 | 90 | 180 | 270,
@@ -178,30 +181,32 @@ export const resizeFrames = (frames: Frame[], oldWidth: number, oldHeight: numbe
   return next;
 });
 
-export const hardwareIndex = (x: number, y: number, width: number, moduleSize = MODULE_SIZE): number => {
+export const hardwareIndex = (x: number, y: number, width: number, moduleSize = MODULE_SIZE, layout: MatrixLayout = "column-major-rtl"): number => {
   const modulesPerRow = Math.ceil(width / moduleSize);
   const moduleX = Math.floor(x / moduleSize);
   const moduleY = Math.floor(y / moduleSize);
   const localX = x % moduleSize;
   const localY = y % moduleSize;
   const moduleIndex = moduleY * modulesPerRow + moduleX;
-  const modulePixel = localY * moduleSize + (localY % 2 ? moduleSize - 1 - localX : localX);
+  const modulePixel = layout === "row-serpentine"
+    ? localY * moduleSize + (localY % 2 ? moduleSize - 1 - localX : localX)
+    : (moduleSize - 1 - localX) * moduleSize + localY;
   return moduleIndex * moduleSize * moduleSize + modulePixel;
 };
 
-export const mappedHardwareIndex = (x: number, y: number, project: Pick<PixelProject, "width" | "height" | "flip_h" | "flip_v" | "rotate">): number => {
+export const mappedHardwareIndex = (x: number, y: number, project: Pick<PixelProject, "width" | "height" | "matrix_layout" | "flip_h" | "flip_v" | "rotate">): number => {
   if (project.flip_h) x = project.width - 1 - x;
   if (project.flip_v) y = project.height - 1 - y;
   let physicalWidth = project.width;
   if (project.rotate === 90) { const nextX = project.height - 1 - y; y = x; x = nextX; physicalWidth = project.height; }
   else if (project.rotate === 180) { x = project.width - 1 - x; y = project.height - 1 - y; }
   else if (project.rotate === 270) { const nextX = y; y = project.width - 1 - x; x = nextX; physicalWidth = project.height; }
-  return hardwareIndex(x, y, physicalWidth);
+  return hardwareIndex(x, y, physicalWidth, MODULE_SIZE, project.matrix_layout);
 };
 
 export const toAnimationJson = (project: PixelProject) => ({
   version: 1, name: project.name, width: project.width, height: project.height, fps: project.fps,
-  brightness: project.brightness / 100, loop: project.loop, format: "RGB565", module_width: 8, mapping: "module-row-major+internal-snake",
+  brightness: project.brightness / 100, loop: project.loop, format: "RGB565", module_width: 8, mapping: project.matrix_layout,
   frames: project.frames.map((frame, index) => ({
     name: project.frame_names[index] ?? defaultFrameName(index),
     duration_ms: Math.max(MIN_FRAME_DURATION, project.frame_durations[index] ?? frameDurationForFps(project.fps)),

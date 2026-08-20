@@ -17,7 +17,7 @@ export function CodePanel({ project }: CodePanelProps) {
     pixel_order: project.pixel_order,
     width: project.width,
     height: project.height,
-    snake: true,
+    matrix_layout: project.matrix_layout,
     module_width: 8,
     module_order: "row-major",
     flip_h: project.flip_h,

@@ -34,7 +34,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(initial.fps);
   const [brightness, setBrightness] = useState(initial.brightness);
-  const [hardware, setHardware] = useState(() => ({ pin: initial.pin, pixel_order: initial.pixel_order, flip_h: initial.flip_h, flip_v: initial.flip_v, rotate: initial.rotate, gamma: initial.gamma, r_balance: initial.r_balance, g_balance: initial.g_balance, b_balance: initial.b_balance }));
+  const [hardware, setHardware] = useState(() => ({ pin: initial.pin, pixel_order: initial.pixel_order, matrix_layout: initial.matrix_layout, flip_h: initial.flip_h, flip_v: initial.flip_v, rotate: initial.rotate, gamma: initial.gamma, r_balance: initial.r_balance, g_balance: initial.g_balance, b_balance: initial.b_balance }));
   const [viewMode, setViewMode] = useState<ViewMode>("creative");
   const [tool, setTool] = useState<Tool>("brush");
   const [color, setColor] = useState("#31F5C3");
@@ -153,7 +153,7 @@ export default function App() {
 
   const openProject = async (file?: File) => {
     if (!file) return;
-    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setFrameNames(opened.frame_names); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ pin: opened.pin, pixel_order: opened.pixel_order, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
+    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setFrameNames(opened.frame_names); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ pin: opened.pin, pixel_order: opened.pixel_order, matrix_layout: opened.matrix_layout, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
     catch (error) { tell(error instanceof Error ? error.message : "项目 JSON 格式无效", true); }
   };
 
@@ -220,7 +220,7 @@ export default function App() {
       <div className="xl:col-span-2"><CodePanel project={project} /></div>
       <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} chip={chip} busy={workshopBusy} onChipChange={setChip} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onFlash={() => void workshopAction("flash")} onDeploy={() => void workshopAction("deploy")} /></div>
     </main>
-    <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本地服务已连接" : "○ 离线编辑模式"}</span><span>GPIO {project.pin} · {project.pixel_order} · 8×8 模块内部 Snake · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.4</span></div></footer>
+      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本地服务已连接" : "○ 离线编辑模式"}</span><span>GPIO {project.pin} · {project.pixel_order} · {project.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.4</span></div></footer>
     {notice && <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-destructive/60 bg-destructive/20" : "border-primary/50 bg-surface-raised"}`}><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)} aria-label="关闭提示"><X className="h-4 w-4" /></button></div>}
   </div>;
 }

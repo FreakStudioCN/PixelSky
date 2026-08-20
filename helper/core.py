@@ -36,12 +36,15 @@ def validate_frames(frames, width: int = 16, height: int = 8) -> list[list[str]]
         raise ValueError(f'every frame must contain exactly {pixels} pixels')
     return [[normalize_hex(c) for c in f] for f in out]
 
-def hardware_index(x: int, y: int, width: int, module_size: int = 8) -> int:
+def hardware_index(x: int, y: int, width: int, module_size: int = 8, layout: str = 'column-major-rtl') -> int:
     modules_per_row = (width + module_size - 1) // module_size
     module_x, module_y = x // module_size, y // module_size
     local_x, local_y = x % module_size, y % module_size
     module_index = module_y * modules_per_row + module_x
-    module_pixel = local_y * module_size + (module_size - 1 - local_x if local_y % 2 else local_x)
+    if layout == 'row-serpentine':
+        module_pixel = local_y * module_size + (module_size - 1 - local_x if local_y % 2 else local_x)
+    else:
+        module_pixel = (module_size - 1 - local_x) * module_size + local_y
     return module_index * module_size * module_size + module_pixel
 
 def mapped_hardware_index(x: int, y: int, width: int, height: int, flip_h=False, flip_v=False, rotate=0) -> int:
