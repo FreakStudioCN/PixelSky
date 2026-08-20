@@ -1,36 +1,75 @@
+"""Load PixelSky JSON files and continuously play them on the LED matrix."""
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
 import gc
-import json
 import time
+
 from pixelsky.neopixel_matrix import NeoPixelMatrix
 
-def load(path):
-    with open(path, 'r') as source:
-        return json.load(source)
+
+CONFIG_PATH = "/pixelsky/config.json"
+ANIMATION_PATH = "/pixelsky/animation.json"
+
+
+def _load(path):
+    with open(path, "r") as handle:
+        return json.load(handle)
+
+
+def _number(value, fallback):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
 
 def run():
-    config = load('pixelsky/config.json')
-    animation = load('pixelsky/animation.json')
-    matrix = NeoPixelMatrix(
-        config.get('width', 16), config.get('height', 8), config.get('pin', 2),
-        config.get('snake', True), config.get('pixel_order', 'GRB'), config.get('module_width', 8),
-        config.get('flip_h', False), config.get('flip_v', False), config.get('rotate', 0),
-        config.get('gamma', 1.0), config.get('r_balance', 1.0),
-        config.get('g_balance', 1.0), config.get('b_balance', 1.0),
+    config = _load(CONFIG_PATH)
+    animation = _load(ANIMATION_PATH)
+    width = int(config.get("width", animation.get("width", 16)))
+    height = int(config.get("height", animation.get("height", 8)))
+    if (width, height) not in ((8, 8), (16, 8), (16, 16)):
+        raise ValueError("unsupported PixelSky matrix size")
+
+    safe_brightness = min(
+        0.2,
+        max(0.0, _number(config.get("brightness", 0.2), 0.2)),
+        max(0.0, _number(animation.get("brightness", 0.2), 0.2)),
     )
-    frames = animation.get('frames', [])
-    fps = max(1, animation.get('fps', config.get('fps', 5)))
-    brightness = animation.get('brightness', config.get('brightness', .2))
-    loop = animation.get('loop', True)
+    matrix = NeoPixelMatrix(
+        width=width,
+        height=height,
+        pin=int(config.get("pin", 2)),
+        module_width=int(config.get("module_width", 8)),
+        snake=config.get("snake", True),
+        pixel_order=config.get("pixel_order", "GRB"),
+        brightness=safe_brightness,
+        flip_h=config.get("flip_h", False),
+        flip_v=config.get("flip_v", False),
+        rotate=int(config.get("rotate", 0)),
+        gamma=_number(config.get("gamma", 1.0), 1.0),
+        r_balance=_number(config.get("r_balance", 1.0), 1.0),
+        g_balance=_number(config.get("g_balance", 1.0), 1.0),
+        b_balance=_number(config.get("b_balance", 1.0), 1.0),
+    )
+    frames = animation.get("frames", [])[:32]
     if not frames:
         matrix.clear()
-        return
+        raise ValueError("animation has no frames")
+    fallback_duration = max(100, int(1000 / max(1, int(animation.get("fps", 5)))))
+    loop = animation.get("loop", True) is not False
+    gc.collect()
+
     while True:
-        for item in frames:
-            frame = item.get('pixels', []) if isinstance(item, dict) else item
-            duration_ms = max(100, item.get('duration_ms', 1000 // fps)) if isinstance(item, dict) else max(100, 1000 // fps)
-            if len(frame) == matrix.width * matrix.height:
-                matrix.show_frame(frame, brightness)
-            time.sleep_ms(duration_ms)
+        for frame in frames:
+            pixels = frame.get("pixels", []) if isinstance(frame, dict) else frame
+            matrix.show_rgb565(pixels)
+            duration = frame.get("duration_ms", fallback_duration) if isinstance(frame, dict) else fallback_duration
+            time.sleep_ms(max(100, int(duration)))
         if not loop:
-            break
-        gc.collect()
+            while True:
+                time.sleep_ms(1000)

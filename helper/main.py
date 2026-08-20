@@ -42,6 +42,7 @@ class Project(BaseModel):
     brightness: float = Field(default=.2, ge=.01, le=1)
     frames: list[list[str]]
     frame_durations: list[int] = Field(default_factory=list)
+    frame_names: list[str] = Field(default_factory=list)
     loop: bool = True
     pin: int = Field(default=2, ge=0, le=48)
     pixel_order: Literal['RGB', 'GRB', 'BGR', 'BRG', 'RBG', 'GBR'] = 'GRB'
@@ -59,6 +60,7 @@ class Project(BaseModel):
         self.frames = validate_frames(self.frames, self.width, self.height)
         fallback = max(100, round(1000 / self.fps))
         self.frame_durations = [max(100, round(self.frame_durations[index])) if index < len(self.frame_durations) else fallback for index in range(len(self.frames))]
+        self.frame_names = [(self.frame_names[index].strip()[:24] if index < len(self.frame_names) and self.frame_names[index].strip() else f'帧 {index + 1:02d}') for index in range(len(self.frames))]
         return self
 
 class UploadRequest(BaseModel):
@@ -85,7 +87,7 @@ class GenerateRequest(BaseModel):
         return self
 
 def animation(project: Project):
-    return {'version': 1, 'width': project.width, 'height': project.height, 'fps': project.fps, 'brightness': project.brightness, 'loop': project.loop, 'format': 'RGB565', 'module_width': 8, 'mapping': 'module-row-major+internal-snake', 'frames': [{'duration_ms': project.frame_durations[index], 'pixels': [hex_to_rgb565(color) for color in frame]} for index, frame in enumerate(project.frames)]}
+    return {'version': 1, 'width': project.width, 'height': project.height, 'fps': project.fps, 'brightness': min(.2, project.brightness), 'loop': project.loop, 'format': 'RGB565', 'module_width': 8, 'mapping': 'module-row-major+internal-snake', 'frames': [{'name': project.frame_names[index], 'duration_ms': project.frame_durations[index], 'pixels': [hex_to_rgb565(color) for color in frame]} for index, frame in enumerate(project.frames)]}
 
 def config(project: Project):
     return {'width': project.width, 'height': project.height, 'pin': project.pin, 'pixel_order': project.pixel_order, 'snake': True, 'module_width': 8, 'module_order': 'row-major', 'flip_h': project.flip_h, 'flip_v': project.flip_v, 'rotate': project.rotate, 'gamma': project.gamma, 'r_balance': project.r_balance, 'g_balance': project.g_balance, 'b_balance': project.b_balance, 'brightness': project.brightness, 'fps': project.fps}
@@ -124,6 +126,7 @@ def write_runtime(port: str, project: Project):
         mpremote(port, ['exec', "import os\ntry: os.mkdir('pixelsky')\nexcept OSError: pass"])
         files = [
             (DEVICE / 'main.py', ':main.py'),
+            (DEVICE / 'pixelsky' / '__init__.py', ':pixelsky/__init__.py'),
             (DEVICE / 'pixelsky' / 'pixelsky_runtime.py', ':pixelsky/pixelsky_runtime.py'),
             (DEVICE / 'pixelsky' / 'neopixel_matrix.py', ':pixelsky/neopixel_matrix.py'),
             (temp / 'config.json', ':pixelsky/config.json'),

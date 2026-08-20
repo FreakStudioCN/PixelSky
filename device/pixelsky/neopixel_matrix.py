@@ -1,37 +1,57 @@
-from machine import Pin
-import framebuf
-import json
-import neopixel
+"""Small WS2812 matrix driver for PixelSky's MicroPython runtime."""
 
-class NeoPixelMatrix(framebuf.FrameBuffer):
-    ORDERS = ('RGB', 'GRB', 'BGR', 'BRG', 'RBG', 'GBR')
 
-    def __init__(self, width=16, height=8, pin=2, snake=True, order='GRB', module_width=8,
-                 flip_h=False, flip_v=False, rotate=0, gamma=1.0,
+def rgb565_to_rgb888(value):
+    value = max(0, min(65535, int(value)))
+    r5 = (value >> 11) & 0x1F
+    g6 = (value >> 5) & 0x3F
+    b5 = value & 0x1F
+    return (r5 * 255 // 31, g6 * 255 // 63, b5 * 255 // 31)
+
+
+def physical_index(x, y, width, module_width=8, snake=True):
+    """Map a coordinate to row-major modules with an internal snake layout."""
+    module_x = x // module_width
+    module_y = y // module_width
+    modules_per_row = (width + module_width - 1) // module_width
+    local_x = x % module_width
+    local_y = y % module_width
+    module_index = module_y * modules_per_row + module_x
+    if snake and local_y % 2:
+        local_x = module_width - 1 - local_x
+    return module_index * module_width * module_width + local_y * module_width + local_x
+
+
+class NeoPixelMatrix:
+    def __init__(self, width, height, pin=2, module_width=8, snake=True,
+                 pixel_order="GRB", brightness=0.2, flip_h=False,
+                 flip_v=False, rotate=0, gamma=1.0,
                  r_balance=1.0, g_balance=1.0, b_balance=1.0):
-        if width < 1 or height < 1:
-            raise ValueError('invalid matrix size')
-        if order not in self.ORDERS:
-            raise ValueError('invalid pixel order')
-        if rotate not in (0, 90, 180, 270):
-            raise ValueError('invalid rotation')
-        self.width = width
-        self.height = height
-        self.snake = snake
-        self.order = order
-        self.module_width = module_width
-        self.flip_h = flip_h
-        self.flip_v = flip_v
-        self.rotate = rotate
-        self.gamma = max(.1, gamma)
-        self.r_balance = r_balance
-        self.g_balance = g_balance
-        self.b_balance = b_balance
-        self.buffer = bytearray(width * height * 2)
-        self.strip = neopixel.NeoPixel(Pin(pin, Pin.OUT), width * height)
-        super().__init__(self.buffer, width, height, framebuf.RGB565)
+        from machine import Pin
+        import neopixel
 
-    def index(self, x, y):
+        self.width = int(width)
+        self.height = int(height)
+        self.count = self.width * self.height
+        self.module_width = int(module_width)
+        self.snake = bool(snake)
+        self.flip_h = bool(flip_h)
+        self.flip_v = bool(flip_v)
+        self.rotate = int(rotate) if int(rotate) in (0, 90, 180, 270) else 0
+        self.gamma = max(0.1, min(3.0, float(gamma)))
+        self.brightness = max(0.0, min(0.2, float(brightness)))
+        self.balance = (
+            max(0.0, min(2.0, float(r_balance))),
+            max(0.0, min(2.0, float(g_balance))),
+            max(0.0, min(2.0, float(b_balance))),
+        )
+        order = str(pixel_order).upper()
+        if sorted(order) != ["B", "G", "R"]:
+            order = "GRB"
+        self.pixels = neopixel.NeoPixel(Pin(int(pin), Pin.OUT), self.count)
+        self.pixels.ORDER = tuple("RGB".index(channel) for channel in order)
+
+    def _transform(self, x, y):
         if self.flip_h:
             x = self.width - 1 - x
         if self.flip_v:
@@ -45,60 +65,27 @@ class NeoPixelMatrix(framebuf.FrameBuffer):
         elif self.rotate == 270:
             x, y = y, self.width - 1 - x
             physical_width = self.height
-        size = self.module_width
-        modules_per_row = (physical_width + size - 1) // size
-        module_x, module_y = x // size, y // size
-        local_x, local_y = x % size, y % size
-        module_index = module_y * modules_per_row + module_x
-        if self.snake and local_y % 2:
-            local_x = size - 1 - local_x
-        return module_index * size * size + local_y * size + local_x
+        return x, y, physical_width
 
-    def rgb(self, value, brightness):
-        r = ((value >> 11) & 31) * 255 / 31
-        g = ((value >> 5) & 63) * 255 / 63
-        b = (value & 31) * 255 / 31
-        exponent = 1.0 / self.gamma
-        r = max(0, min(255, int(255 * ((r / 255) ** exponent) * brightness * self.r_balance)))
-        g = max(0, min(255, int(255 * ((g / 255) ** exponent) * brightness * self.g_balance)))
-        b = max(0, min(255, int(255 * ((b / 255) ** exponent) * brightness * self.b_balance)))
-        values = {'R': r, 'G': g, 'B': b}
-        return tuple(values[channel] for channel in self.order)
+    def _correct(self, color):
+        corrected = []
+        for index, channel in enumerate(color):
+            normalized = max(0.0, min(1.0, float(channel) / 255.0))
+            value = int((normalized ** self.gamma) * 255 * self.brightness * self.balance[index])
+            corrected.append(max(0, min(255, value)))
+        return tuple(corrected)
 
-    def show(self, brightness=.2, x1=0, y1=0, x2=None, y2=None):
-        x2 = self.width - 1 if x2 is None else x2
-        y2 = self.height - 1 if y2 is None else y2
-        if not (0 <= x1 <= x2 < self.width and 0 <= y1 <= y2 < self.height):
-            raise ValueError('invalid refresh area')
-        for y in range(y1, y2 + 1):
-            for x in range(x1, x2 + 1):
-                self.strip[self.index(x, y)] = self.rgb(self.pixel(x, y), brightness)
-        self.strip.write()
-
-    def show_frame(self, values, brightness=.2):
-        if len(values) != self.width * self.height:
-            raise ValueError('invalid frame length')
-        for index, value in enumerate(values):
-            self.pixel(index % self.width, index // self.width, value)
-        self.show(brightness)
-
-    def show_rgb565_image(self, data, offset_x=0, offset_y=0, brightness=.2):
-        if isinstance(data, str):
-            data = json.loads(data)
-        pixels = data.get('pixels')
-        image_width = data.get('width', self.width)
-        if not isinstance(pixels, list) or image_width < 1:
-            raise ValueError('invalid RGB565 image')
-        for index, color in enumerate(pixels):
-            x, y = index % image_width + offset_x, index // image_width + offset_y
-            if 0 <= x < self.width and 0 <= y < self.height and 0 <= color <= 0xffff:
-                self.pixel(x, y, color)
-        self.show(brightness)
-
-    def load_rgb565_image(self, filename, offset_x=0, offset_y=0, brightness=.2):
-        with open(filename, 'r') as source:
-            self.show_rgb565_image(json.load(source), offset_x, offset_y, brightness)
+    def show_rgb565(self, values):
+        for logical_index in range(self.count):
+            value = values[logical_index] if logical_index < len(values) else 0
+            x = logical_index % self.width
+            y = logical_index // self.width
+            px, py, physical_width = self._transform(x, y)
+            index = physical_index(px, py, physical_width, self.module_width, self.snake)
+            if 0 <= index < self.count:
+                self.pixels[index] = self._correct(rgb565_to_rgb888(value))
+        self.pixels.write()
 
     def clear(self):
-        self.fill(0)
-        self.show(0)
+        self.pixels.fill((0, 0, 0))
+        self.pixels.write()

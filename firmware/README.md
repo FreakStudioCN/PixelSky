@@ -8,3 +8,15 @@
 - ESP32-S2：https://micropython.org/download/ESP32_GENERIC_S2/
 - ESP32-S3：https://micropython.org/download/ESP32_GENERIC_S3/
 - ESP32-C3：https://micropython.org/download/ESP32_GENERIC_C3/
+
+XIAO ESP32-C3 建议使用板级固件：https://micropython.org/download/SEEED_XIAO_ESP32C3/
+
+烧录后点击“上传完整运行时”会写入：
+
+- `/main.py`
+- `/pixelsky/pixelsky_runtime.py`
+- `/pixelsky/neopixel_matrix.py`
+- `/pixelsky/config.json`
+- `/pixelsky/animation.json`
+
+运行时支持 8×8、16×8、16×16，模块按行优先串联，每块 8×8 内部蛇形排列；支持 RGB565、多帧时长、亮度上限 0.2、色序、Gamma、通道平衡、翻转和旋转。
