@@ -39,7 +39,7 @@ export default function App() {
   const [fps, setFps] = useState(initial.fps);
   const [brightness, setBrightness] = useState(initial.brightness);
   const [hardware, setHardware] = useState(() => ({ board: initial.board, pin: initial.pin, pixel_order: initial.pixel_order, matrix_layout: initial.matrix_layout, flip_h: initial.flip_h, flip_v: initial.flip_v, rotate: initial.rotate, gamma: initial.gamma, r_balance: initial.r_balance, g_balance: initial.g_balance, b_balance: initial.b_balance }));
-  const [creationMode, setCreationMode] = useState<CreationMode>("custom");
+  const [creationMode, setCreationMode] = useState<CreationMode>("basic");
   const [basicDisplay, setBasicDisplay] = useState<BasicDisplay>("time");
   const [basicColors, setBasicColors] = useState<BasicColors>({ primary: "#FF7A45", cloud: "#F8FAFC", precipitation: "#7DF9FF", accent: "#FFD166", background: EMPTY });
   const [weather, setWeather] = useState<WeatherKind>("sunny");
