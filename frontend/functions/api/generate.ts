@@ -149,13 +149,13 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
-const hasVisibleSubject = (frames: Frame[], width: number, height: number) => frames.every((frame) => {
+const hasVisibleSubject = (frame: Frame, width: number, height: number) => {
   const counts = new Map<string, number>();
   frame.forEach((color) => counts.set(color, (counts.get(color) || 0) + 1));
   const largestArea = Math.max(...counts.values());
   const foregroundPixels = width * height - largestArea;
   return counts.size >= 2 && foregroundPixels >= Math.max(4, Math.floor(width * height * .08));
-});
+};
 
 const parseModelJson = (content: string): unknown => {
   const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -203,7 +203,8 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
       const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as Record<string, unknown>;
       const candidate = (parsed.animation ?? parsed.project ?? parsed.data ?? parsed.result ?? parsed) as Record<string, unknown>;
       const frames = normalizeModelFrames(candidate.frames ?? candidate.pixels, candidate.palette ?? parsed.palette, width, height);
-      if (frames && hasVisibleSubject(frames, width, height)) return { frames, status: "ok" };
+      const visibleFrames = frames?.filter((frame) => hasVisibleSubject(frame, width, height)) ?? [];
+      if (visibleFrames.length) return { frames: visibleFrames, status: "ok" };
     }
     return { frames: null, status: "invalid_response" };
   } catch { return { frames: null, status: "request_failed" }; }
