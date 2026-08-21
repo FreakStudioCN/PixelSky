@@ -154,7 +154,7 @@ const hasVisibleSubject = (frame: Frame, width: number, height: number) => {
   frame.forEach((color) => counts.set(color, (counts.get(color) || 0) + 1));
   const largestArea = Math.max(...counts.values());
   const foregroundPixels = width * height - largestArea;
-  return counts.size >= 2 && foregroundPixels >= Math.max(4, Math.floor(width * height * .08));
+  return counts.size >= 2 && foregroundPixels >= 4;
 };
 
 const parseModelJson = (content: string): unknown => {
