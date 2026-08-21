@@ -5,12 +5,14 @@ export type WeatherKind = "sunny" | "partly-cloudy" | "cloudy" | "rain" | "thund
 
 export interface BasicColors {
   primary: string;
+  cloud: string;
+  precipitation: string;
   accent: string;
   background: string;
 }
 
 export const WEATHER_LABELS: Record<WeatherKind, string> = {
-  sunny: "晴", "partly-cloudy": "多云", cloudy: "阴", rain: "雨", thunderstorm: "雷阵雨", snow: "雪", fog: "雾",
+  sunny: "晴", "partly-cloudy": "多云", cloudy: "阴", rain: "雨", thunderstorm: "雷阵雨", snow: "雪", fog: "雾霾",
 };
 
 export const classifyWeather = (code: number): WeatherKind => {
@@ -35,7 +37,6 @@ const GLYPHS: Record<string, string[]> = {
 
 const makeFrame = (background: string) => Array.from({ length: 128 }, () => background || EMPTY);
 const set = (frame: Frame, x: number, y: number, color: string) => { if (x >= 0 && x < 16 && y >= 0 && y < 8) frame[y * 16 + x] = color; };
-const points = (frame: Frame, values: Array<[number, number]>, color: string) => values.forEach(([x, y]) => set(frame, x, y, color));
 
 const drawText = (text: string, colors: BasicColors): Frame => {
   const frame = makeFrame(colors.background);
@@ -45,31 +46,60 @@ const drawText = (text: string, colors: BasicColors): Frame => {
   const width = rawWidth + spacedGaps;
   let x = Math.max(0, Math.floor((16 - width) / 2));
   glyphs.forEach((glyph, index) => {
-    glyph.forEach((row, y) => [...row].forEach((value, offset) => { if (value === "1") set(frame, x + offset, y + 1, colors.primary); }));
+    glyph.forEach((row, y) => [...row].forEach((value, offset) => { if (value === "1") set(frame, x + offset, y + 1, colors.cloud); }));
     x += glyph[0].length + (index < spacedGaps ? 1 : 0);
   });
   return frame;
 };
 
-const cloud = [[4,3],[5,2],[6,2],[7,3],[8,2],[9,2],[10,3],[3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[9,4],[10,4],[11,4]] as Array<[number, number]>;
+export const WEATHER_TEMPLATES: Record<WeatherKind, string[]> = {
+  sunny: [
+    "................", "......HHHH......", ".....HPPPPH.....", ".....HPPPPH.....",
+    ".....HPPPPH.....", ".....HPPPPH.....", "......HHHH......", "................",
+  ],
+  "partly-cloudy": [
+    "................", ".....CCCC.......", "....CCCCCC......", "....CCCCCCCC....",
+    "...CCCCCCCCCC...", "..CCCCCCCCCCCC..", "..CCCCCCCCCCCC..", "................",
+  ],
+  cloudy: [
+    "................", ".....CCCC.......", "....CCCCCC......", "....CCCCCCCC....",
+    "...CCCCCCCCCC...", "..CCCCCCCCCCCC..", "..CCCCCCCCCCCC..", "................",
+  ],
+  rain: [
+    ".....CCCC.......", "....CCCCCCC.....", "...CCCCCCCCC....", "...R...R...R....",
+    "...R.R...R......", ".....R...R.R....", "...R...R...R....", ".......R........",
+  ],
+  thunderstorm: [
+    ".....CCCC.......", "....CCCCCCC.....", "...CCCCCCCCC....", ".....H.R...R....",
+    "....H....R......", ".....H...R.R....", "....H..R...R....", ".......R........",
+  ],
+  snow: [
+    ".....CCCC.......", "....CCCCCCC.....", "...CCCCCCCCC....", ".......S...S....",
+    "...S.S...S......", "................", "...S...S...S....", ".....S...S......",
+  ],
+  fog: [
+    "................", "......CCCC......", "....CCCCCCC.....", "...CCCCCCCCC....",
+    "................", "..M.M.M.M.M.M...", "...M.M.M.M.M....", "................",
+  ],
+};
+
+const dimHex = (hex: string, factor: number) => {
+  const clean = hex.replace("#", "");
+  const channels = [0, 2, 4].map((index) => Math.round(parseInt(clean.slice(index, index + 2), 16) * factor));
+  return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+};
 
 export const renderWeather = (kind: WeatherKind, colors: BasicColors): Frame => {
   const frame = makeFrame(colors.background);
-  if (kind === "sunny") {
-    points(frame, [[7,2],[8,2],[6,3],[7,3],[8,3],[9,3],[6,4],[7,4],[8,4],[9,4],[7,5],[8,5]], colors.primary);
-    points(frame, [[7,0],[8,0],[7,7],[8,7],[3,3],[3,4],[12,3],[12,4],[4,0],[11,0],[4,7],[11,7]], colors.accent);
-  } else if (kind === "partly-cloudy") {
-    points(frame, [[10,0],[11,0],[9,1],[10,1],[11,1],[12,1],[10,2],[11,2],[13,1]], colors.accent);
-    points(frame, cloud, colors.primary);
-  } else if (kind === "fog") {
-    points(frame, [[2,2],[3,2],[4,2],[5,2],[6,2],[8,2],[9,2],[10,2],[11,2],[12,2],[13,2],[3,4],[4,4],[5,4],[6,4],[7,4],[9,4],[10,4],[11,4],[12,4],[2,6],[3,6],[4,6],[5,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6]], colors.primary);
-  } else {
-    points(frame, cloud, kind === "cloudy" ? colors.primary : colors.accent);
-    if (kind === "cloudy") points(frame, [[5,5],[6,5],[7,5],[8,5],[9,5],[10,5]], colors.accent);
-    if (kind === "rain") points(frame, [[4,6],[7,6],[10,6],[5,7],[8,7],[11,7]], colors.primary);
-    if (kind === "snow") points(frame, [[4,6],[7,6],[10,6],[4,7],[7,7],[10,7]], colors.primary);
-    if (kind === "thunderstorm") points(frame, [[7,5],[9,5],[8,6],[7,7],[9,7]], colors.primary);
-  }
+  const roleColors: Record<string, string> = {
+    P: colors.primary,
+    H: colors.accent,
+    C: kind === "cloudy" ? dimHex(colors.cloud, .56) : colors.cloud,
+    R: colors.precipitation,
+    S: colors.cloud,
+    M: colors.cloud,
+  };
+  WEATHER_TEMPLATES[kind].forEach((row, y) => [...row].forEach((role, x) => { if (role !== ".") set(frame, x, y, roleColors[role]); }));
   return frame;
 };
 
