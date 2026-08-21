@@ -30,14 +30,14 @@ export function WorkshopCard({ port, result, firmwareName, chip, busy, onCheck, 
     <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <Button variant="outline" onClick={onCheck} disabled={disabled}>{busy === "check" ? <Loader2 className="animate-spin" /> : <ClipboardCheck />}一键设备检查</Button>
       <Button variant="outline" onClick={onLedTest} disabled={disabled}>{busy === "led" ? <Loader2 className="animate-spin" /> : <Siren />}红绿蓝灯板测试</Button>
-      <select value={chip} onChange={(event) => onChipChange(event.target.value as EspChip)} disabled={busy !== null} className="h-9 rounded-md border border-input bg-background px-3 text-xs"><option value="esp32">ESP32 Generic · 0x1000</option><option value="esp32s2">ESP32-S2 · 0x1000</option><option value="esp32s3">ESP32-S3 · 0x0</option><option value="esp32c3">ESP32-C3 · 0x0</option></select>
+      <select aria-label="固件芯片与烧录偏移" value={chip} onChange={(event) => onChipChange(event.target.value as EspChip)} disabled={busy !== null} className="h-9 rounded-md border border-input bg-background px-3 text-xs"><option value="esp32">ESP32 WROOM / WROOM-32 · 0x1000</option><option value="esp32s2">ESP32-S2 · 0x1000</option><option value="esp32s3">ESP32-S3 · 0x0</option><option value="esp32c3">XIAO ESP32-C3 · 0x0</option></select>
       <Button variant="outline" onClick={() => picker.current?.click()} disabled={busy !== null}><Upload />{firmwareName || "选择 .bin 固件"}</Button>
       <Button onClick={onDeploy} disabled={disabled}>{busy === "deploy" ? <Loader2 className="animate-spin" /> : <Zap />}课堂快速部署</Button>
     </div>
     <input ref={picker} hidden type="file" accept=".bin,application/octet-stream" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFirmware(file); }} />
     <div className="mt-2 flex items-center gap-2">
       <Button variant="outline" size="sm" onClick={onFlash} disabled={disabled || !firmwareName}>{busy === "flash" ? <Loader2 className="animate-spin" /> : <Cpu />}擦除并烧录 MicroPython</Button>
-      <p className="text-[11px] text-muted-foreground">烧录会清空设备；完成后再执行“课堂快速部署”。</p>
+      <p className="text-[11px] text-muted-foreground">WROOM 使用 MicroPython 官方 ESP32 Generic 固件；烧录会清空设备，完成后再执行“课堂快速部署”。</p>
     </div>
     {result && <div className="mt-4 grid gap-2 rounded-lg border border-border bg-background p-3 sm:grid-cols-2 xl:grid-cols-4">
       <span className="flex items-center gap-2 text-xs"><CheckCircle2 className="h-4 w-4 text-primary" />MicroPython {result.micropython}</span>
