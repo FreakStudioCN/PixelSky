@@ -9,6 +9,7 @@ export type ViewMode = "creative" | "hardware";
 export type PixelOrder = "RGB" | "GRB" | "BGR" | "BRG" | "RBG" | "GBR";
 export type MatrixLayout = "column-major-rtl" | "row-serpentine";
 export type EspChip = "esp32" | "esp32s2" | "esp32s3" | "esp32c3";
+export type BoardProfile = "xiao_esp32c3" | "esp32_wroom";
 
 export interface PixelProject {
   version: 1;
@@ -21,6 +22,7 @@ export interface PixelProject {
   frame_durations: number[];
   frame_names: string[];
   loop: boolean;
+  board: BoardProfile;
   pin: number;
   pixel_order: PixelOrder;
   matrix_layout: MatrixLayout;
@@ -104,7 +106,7 @@ export const sanitizeFrameNames = (input: unknown, count: number): string[] => {
   });
 };
 
-export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [emptyFrame(width, height)], frame_durations: [200], frame_names: [defaultFrameName(0)], loop: true, pin: 2, pixel_order: "GRB", matrix_layout: "column-major-rtl", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
+export const createProject = (name = "未命名动画", width = 16, height = 8): PixelProject => ({ version: 1, name, width, height, fps: 5, brightness: 20, frames: [emptyFrame(width, height)], frame_durations: [200], frame_names: [defaultFrameName(0)], loop: true, board: "xiao_esp32c3", pin: 2, pixel_order: "GRB", matrix_layout: "column-major-rtl", flip_h: false, flip_v: false, rotate: 0, gamma: 1, r_balance: 1, g_balance: 1, b_balance: 1 });
 
 export const sanitizeFrame = (input: unknown, width: number, height: number): Frame => {
   const base = emptyFrame(width, height);
@@ -164,6 +166,7 @@ export const parseProject = (raw: string): PixelProject => {
     frame_durations: sanitizeFrameDurations(rawDurations, sanitized.length, safeFps),
     frame_names: sanitizeFrameNames(rawNames, sanitized.length),
     loop: object.loop !== false,
+    board: object.board === "esp32_wroom" ? "esp32_wroom" : "xiao_esp32c3",
     pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : 2,
     pixel_order: (["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"].includes(String(object.pixel_order)) ? String(object.pixel_order) : "GRB") as PixelOrder,
     matrix_layout: (object.matrix_layout === "row-serpentine" ? "row-serpentine" : "column-major-rtl") as MatrixLayout,

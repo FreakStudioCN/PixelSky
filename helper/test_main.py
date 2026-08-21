@@ -7,11 +7,19 @@ class MainTests(unittest.TestCase):
 
     def test_hardware_config(self):
         data = config(self.project())
+        self.assertEqual(data['board'], 'xiao_esp32c3')
         self.assertEqual(data['pin'], 4)
         self.assertEqual(data['pixel_order'], 'RGB')
         self.assertTrue(data['flip_h'])
         self.assertEqual(data['rotate'], 90)
         self.assertEqual(data['gamma'], 2.2)
+
+    def test_esp32_wroom_profile(self):
+        project = Project(width=8, height=8, frames=[['#000000'] * 64], board='esp32_wroom', pin=5)
+        data = config(project)
+        self.assertEqual(data['board'], 'esp32_wroom')
+        self.assertEqual(data['pin'], 5)
+        self.assertEqual(firmware_target('esp32'), ('esp32', '0x1000'))
 
     def test_firmware_offsets(self):
         self.assertEqual(firmware_target('esp32'), ('esp32', '0x1000'))

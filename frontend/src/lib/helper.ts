@@ -75,7 +75,7 @@ export interface DeviceCheck {
 }
 
 export const checkDevice = (port: string) => request<DeviceCheck>("/api/device-check", { method: "POST", body: JSON.stringify({ port }) });
-export const testLeds = (port: string, count: number) => request<{ message?: string }>("/api/led-test", { method: "POST", body: JSON.stringify({ port, pin: 2, count }) });
+export const testLeds = (port: string, count: number, pin: number) => request<{ message?: string }>("/api/led-test", { method: "POST", body: JSON.stringify({ port, pin, count }) });
 
 export const flashFirmware = async (port: string, firmware: File, chip: "esp32" | "esp32s2" | "esp32s3" | "esp32c3") => {
   const controller = new AbortController();

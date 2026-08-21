@@ -1,5 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
-import type { MatrixLayout, PixelOrder, PixelProject } from "@/lib/pixel";
+import type { BoardProfile, MatrixLayout, PixelOrder, PixelProject } from "@/lib/pixel";
 
 interface HardwareSettingsCardProps { project: PixelProject; onChange: (patch: Partial<PixelProject>) => void }
 const ORDERS: PixelOrder[] = ["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"];
@@ -8,7 +8,8 @@ export function HardwareSettingsCard({ project, onChange }: HardwareSettingsCard
   const range = (key: "gamma" | "r_balance" | "g_balance" | "b_balance", label: string, min: number, max: number) => <label className="grid gap-1 text-[10px] text-muted-foreground"><span className="flex justify-between"><span>{label}</span><b className="font-mono text-primary">{project[key].toFixed(1)}</b></span><input type="range" min={min} max={max} step="0.1" value={project[key]} onChange={(event) => onChange({ [key]: Number(event.target.value) })} className="accent-[var(--primary)]" /></label>;
   return <section className="panel p-4">
     <div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary"><SlidersHorizontal className="h-4 w-4" /></span><div><p className="panel-label">Matrix Calibration</p><h2 className="text-sm font-semibold">矩阵方向与色彩校准</h2></div></div>
-    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <label className="grid gap-1 text-[10px] text-muted-foreground">开发板<select value={project.board} onChange={(event) => { const board = event.target.value as BoardProfile; onChange({ board, pin: board === "esp32_wroom" ? 5 : 2 }); }} className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground"><option value="xiao_esp32c3">XIAO ESP32-C3</option><option value="esp32_wroom">ESP32 WROOM DevKit</option></select></label>
       <label className="grid gap-1 text-[10px] text-muted-foreground">GPIO<input type="number" min="0" max="48" value={project.pin} onChange={(event) => onChange({ pin: Number(event.target.value) })} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground" /></label>
       <label className="grid gap-1 text-[10px] text-muted-foreground">颜色顺序<select value={project.pixel_order} onChange={(event) => onChange({ pixel_order: event.target.value as PixelOrder })} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground">{ORDERS.map((order) => <option key={order}>{order}</option>)}</select></label>
       <label className="grid gap-1 text-[10px] text-muted-foreground">矩阵走线<select value={project.matrix_layout} onChange={(event) => onChange({ matrix_layout: event.target.value as MatrixLayout })} className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground"><option value="column-major-rtl">右起逐列（当前板）</option><option value="row-serpentine">逐行蛇形</option></select></label>

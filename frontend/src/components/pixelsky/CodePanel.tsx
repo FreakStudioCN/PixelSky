@@ -16,6 +16,7 @@ export function CodePanel({ project }: CodePanelProps) {
   const micropython = useMemo(() => toMicroPythonCode(project), [project]);
   const arduino = useMemo(() => toArduinoCode(project), [project]);
   const config = useMemo(() => ({
+    board: project.board,
     pin: project.pin,
     pixel_order: project.pixel_order,
     width: project.width,

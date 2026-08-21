@@ -11,6 +11,8 @@
 
 XIAO ESP32-C3 建议使用板级固件：https://micropython.org/download/SEEED_XIAO_ESP32C3/
 
+ESP32 WROOM / WROOM-32 开发板请选择 **ESP32 Generic** 固件，Web 端板卡选择 **ESP32 WROOM DevKit**，烧录芯片选择 **ESP32 Generic · 0x1000**。默认 LED 数据脚为 GPIO5。
+
 烧录后点击“上传完整运行时”会写入：
 
 - `/main.py`

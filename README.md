@@ -1,6 +1,6 @@
 # PixelSky MVP
 
-本地优先的 16×8 WS2812 像素动画工作台，包含 React Web 界面、FastAPI Helper 和 ESP32 MicroPython runtime。
+本地优先的 16×8 WS2812 像素动画工作台，包含 React Web 界面、FastAPI Helper 和 ESP32 MicroPython runtime。界面提供可自由绘制的自定义模式，以及固定 16×8 的联网基本模式（时间、温度、天气）；基本模式的数字和七类天气图标不可修改，只能调整颜色。
 
 ## 启动
 
@@ -54,6 +54,10 @@ AI 环境变量：`DEEPSEEK_API_KEY`；可选 `DEEPSEEK_MODEL`。高级兼容配
 硬件默认 GPIO2、GRB、右起逐列、亮度 0.2。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地；校准面板也可切换为逐行蛇形走线。
 
 XIAO ESP32-C3 接线：`D0/GPIO2 → 首块 DI`，首块 `DO → 次块 DI`；两块矩阵的 `V` 接外置 5V，两块 `G`、电源负极和 XIAO `GND` 必须共地。完整运行时位于 `device/`，由本地 Helper 通过 `mpremote` 上传。
+
+ESP32 WROOM DevKit 接线：在“矩阵方向与色彩校准”中选择 **ESP32 WROOM DevKit**，默认使用 `GPIO5 → 首块 DI`；矩阵接稳定 5V，矩阵 GND、电源负极和 ESP32 GND 共地。烧录时使用 ESP32 Generic 固件并选择 `ESP32 Generic · 0x1000`。
+
+基本模式由浏览器定位并通过 Open-Meteo 获取当地温度和天气，时间取自当前设备。网页保持打开时，时间每分钟变化、天气每 15 分钟更新；开启“自动同步到已连接的 ESP32”后，变化会通过本地 Helper 自动发送到灯板。
 
 ## 验证
 
