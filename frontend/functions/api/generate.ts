@@ -18,7 +18,7 @@ type Context = { request: Request; env: Env };
 type Frame = string[];
 
 const SIZES = new Set(["8x8", "16x8", "16x16"]);
-const COLORS = { bg: "#07130F", mint: "#31F5C3", purple: "#9B7BFF", pink: "#FF5A9D", yellow: "#FFCB5C", blue: "#52B7FF", white: "#FFFFFF" };
+const COLORS = { bg: "#07130F", night: "#24103D", mint: "#31F5C3", mintDark: "#149C82", purple: "#9B7BFF", pink: "#FF5A9D", yellow: "#FFCB5C", blue: "#52B7FF", white: "#FFFFFF" };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +74,21 @@ function fallbackFrames(prompt: string, width: number, height: number): Frame[] 
         setPixel(frame, width, height, x, top + 4, COLORS.white);
         setPixel(frame, width, height, x, top + 5, COLORS.white);
       }
+    });
+  } else if (prompt.includes("流星") || prompt.includes("彗星") || low.includes("meteor") || low.includes("comet")) {
+    const positions = Array.from({ length: 4 }, (_, index) => ({ x: Math.max(2, Math.round(width * (.28 + index * .16))), y: Math.max(1, Math.min(height - 3, Math.round(height * (.68 - index * .13)))) }));
+    frames.forEach((frame, index) => {
+      frame.fill(COLORS.night);
+      const { x, y } = positions[index];
+      for (let tail = 2; tail <= Math.min(6, x); tail++) {
+        setPixel(frame, width, height, x - tail, y + Math.floor(tail / 3), tail > 4 ? COLORS.mintDark : COLORS.mint);
+      }
+      setPixel(frame, width, height, x - 1, y, COLORS.mint);
+      setPixel(frame, width, height, x, y, COLORS.white);
+      setPixel(frame, width, height, x + 1, y, COLORS.yellow);
+      setPixel(frame, width, height, x, y - 1, COLORS.white);
+      setPixel(frame, width, height, x, y + 1, COLORS.mint);
+      setPixel(frame, width, height, width - 2, 1, COLORS.purple);
     });
   } else if (prompt.includes("爱心") || low.includes("heart")) {
     const points = [[-3,-1],[-2,-2],[-1,-1],[0,-1],[1,-2],[2,-1],[-4,0],[3,0],[-3,1],[2,1],[-2,2],[1,2],[-1,3],[0,3]];
@@ -149,12 +164,20 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
-const hasVisibleSubject = (frame: Frame, width: number, height: number) => {
+const rgb = (color: string) => [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)];
+const isPurple = (color: string) => { const [r, g, b] = rgb(color); return b > g * 1.2 && r > g * .8; };
+const isMint = (color: string) => { const [r, g, b] = rgb(color); return g > r * 1.08 && g > b * 1.02; };
+
+const hasVisibleSubject = (frame: Frame, width: number, height: number, prompt: string) => {
   const counts = new Map<string, number>();
   frame.forEach((color) => counts.set(color, (counts.get(color) || 0) + 1));
-  const largestArea = Math.max(...counts.values());
+  const [dominantColor, largestArea] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   const foregroundPixels = width * height - largestArea;
-  return counts.size >= 2 && foregroundPixels >= 4;
+  if (counts.size < 2 || foregroundPixels < 4) return false;
+  const foregroundColors = [...counts.keys()].filter((color) => color !== dominantColor);
+  if ((prompt.includes("紫色夜空") || prompt.includes("紫色背景")) && !isPurple(dominantColor)) return false;
+  if ((prompt.includes("薄荷绿") || prompt.toLowerCase().includes("mint")) && !foregroundColors.some(isMint)) return false;
+  return true;
 };
 
 const parseModelJson = (content: string): unknown => {
@@ -208,7 +231,7 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
       const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as Record<string, unknown>;
       const candidate = (parsed.animation ?? parsed.project ?? parsed.data ?? parsed.result ?? parsed) as Record<string, unknown>;
       const frames = normalizeModelFrames(candidate.frames ?? candidate.pixels, candidate.palette ?? parsed.palette, width, height);
-      const visibleFrames = frames?.filter((frame) => hasVisibleSubject(frame, width, height)) ?? [];
+      const visibleFrames = frames?.filter((frame) => hasVisibleSubject(frame, width, height, prompt)) ?? [];
       if (visibleFrames.length) return { frames: visibleFrames, status: "ok" };
     }
     return { frames: null, status: "invalid_response" };
