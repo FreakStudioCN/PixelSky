@@ -149,6 +149,14 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
+const hasVisibleSubject = (frames: Frame[], width: number, height: number) => frames.some((frame) => {
+  const counts = new Map<string, number>();
+  frame.forEach((color) => counts.set(color, (counts.get(color) || 0) + 1));
+  const largestArea = Math.max(...counts.values());
+  const foregroundPixels = width * height - largestArea;
+  return counts.size >= 2 && foregroundPixels >= Math.max(4, Math.floor(width * height * .08));
+});
+
 const parseModelJson = (content: string): unknown => {
   const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const start = cleaned.indexOf("{");
@@ -161,34 +169,43 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
   if (!apiKey) return { frames: null, status: "not_configured" };
   const baseUrl = (env.PIXELSKY_AI_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
   const maxGeneratedFrames = width * height <= 64 ? 6 : width * height <= 128 ? 4 : 2;
+  const exampleRows = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => {
+    const centerX = Math.floor(width / 2);
+    const centerY = Math.floor(height / 2);
+    return Math.abs(x - centerX) + Math.abs(y - centerY) <= 1 ? "1" : "0";
+  }).join(""));
   const subjectGuidance = prompt.includes("猫") || prompt.toLowerCase().includes("cat")
     ? "The cat must visibly have two triangular ears, two separated eyes, a small nose, a mouth, and left/right whiskers. Animate the eyelids only for blinking; do not draw a bird or chicken."
     : "Use the subject's most distinctive silhouette and features so it is recognizable without explanation.";
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       signal: AbortSignal.timeout(40000),
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-flash",
+        model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-pro",
         thinking: { type: "disabled" },
         response_format: { type: "json_object" },
         max_tokens: 4096,
         stream: false,
         messages: [
-          { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Understand Simplified Chinese instructions as the primary input language. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
-          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, recognition_guidance: subjectGuidance, exact_output_example: { palette: ["#07130F", "#FFFFFF", "#FFCB5C"], frames: [Array.from({ length: height }, () => "0".repeat(width))] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} digits`, "each digit is the zero-based palette index"], requirements: ["Replace the blank example with recognizable pixel art matching the requested subject and action", "Fill enough pixels to make the subject recognizable", "Keep every frame inside the exact selected canvas", "Use the same palette for all frames"] }) },
+          { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Understand Simplified Chinese instructions as the primary input language. Create the exact requested subject, colors, setting, and action. Never substitute an unrelated subject or return blank/solid-color frames. The canvas is exactly ${width}x${height}; use hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Preserve the same subject between frames and change only the requested motion. Return one valid JSON object with palette and frames, and no Markdown.` },
+          { role: "user", content: JSON.stringify({ user_request: prompt, selected_canvas: `${width}x${height}`, frame_count: `2 to ${maxGeneratedFrames}`, recognition_guidance: subjectGuidance, retry_instruction: attempt ? "The previous result was blank or lacked a visible subject. Redesign it with a clear foreground silhouette and distinctive requested features." : undefined, structural_example_do_not_copy: { palette: ["#07130F", "#FFFFFF"], frames: [exampleRows] }, output_rules: [`palette must be a JSON array of 2-10 #RRGGBB strings`, `frames must be an array of frames`, `each frame must contain exactly ${height} row strings`, `each row string must contain exactly ${width} palette-index digits`, "palette index 0 is the background", "use at least two palette indices in every frame"], requirements: ["Match the user's subject and requested colors instead of copying the structural example", "Foreground must occupy 15%-65% of the canvas", "Include the subject's distinctive features", "Keep every frame inside the selected canvas", "Use the same palette for all frames"] }) },
         ],
       }),
-    });
-    if (!response.ok) return { frames: null, status: "request_failed" };
-    const payload = await response.json() as { choices?: Array<{ finish_reason?: string; message?: { content?: string } }> };
-    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as Record<string, unknown>;
-    const candidate = (parsed.animation ?? parsed.project ?? parsed.data ?? parsed.result ?? parsed) as Record<string, unknown>;
-    const frames = normalizeModelFrames(candidate.frames ?? candidate.pixels, candidate.palette ?? parsed.palette, width, height);
-    return frames
-      ? { frames, status: "ok" }
-      : { frames: null, status: "invalid_response" };
+      });
+      if (!response.ok) {
+        if (attempt === 1) return { frames: null, status: "request_failed" };
+        continue;
+      }
+      const payload = await response.json() as { choices?: Array<{ finish_reason?: string; message?: { content?: string } }> };
+      const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as Record<string, unknown>;
+      const candidate = (parsed.animation ?? parsed.project ?? parsed.data ?? parsed.result ?? parsed) as Record<string, unknown>;
+      const frames = normalizeModelFrames(candidate.frames ?? candidate.pixels, candidate.palette ?? parsed.palette, width, height);
+      if (frames && hasVisibleSubject(frames, width, height)) return { frames, status: "ok" };
+    }
+    return { frames: null, status: "invalid_response" };
   } catch { return { frames: null, status: "request_failed" }; }
 }
 
