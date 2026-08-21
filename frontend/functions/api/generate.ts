@@ -102,14 +102,16 @@ const normalizeAiColor = (value: unknown): string | null => {
 };
 
 const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: number, height: number): Frame[] | null => {
-  const paletteSource = Array.isArray(paletteValue)
-    ? paletteValue
+  const paletteEntries = Array.isArray(paletteValue)
+    ? paletteValue.map((entry, index) => [String(index), entry] as const)
     : paletteValue && typeof paletteValue === "object"
-      ? Object.entries(paletteValue as Record<string, unknown>).sort(([a], [b]) => Number(a) - Number(b)).map(([, color]) => color)
+      ? Object.entries(paletteValue as Record<string, unknown>)
       : [];
-  const palette = paletteSource.map((entry) => {
+  const palette = new Map<string, string>();
+  paletteEntries.forEach(([symbol, entry]) => {
     const color = typeof entry === "string" ? entry : entry && typeof entry === "object" ? (entry as { color?: unknown; hex?: unknown }).color ?? (entry as { hex?: unknown }).hex : null;
-    return normalizeAiColor(color);
+    const normalized = normalizeAiColor(color);
+    if (normalized) palette.set(symbol, normalized);
   });
   const frameSource = Array.isArray(value)
     ? value.slice(0, 32)
@@ -119,9 +121,9 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
   if (frameSource.length < 1) return null;
   const frames: Frame[] = [];
   for (const entry of frameSource) {
-    const data = Array.isArray(entry) ? entry : entry && typeof entry === "object" ? (entry as { rows?: unknown; grid?: unknown; pixels?: unknown }).pixels ?? (entry as { rows?: unknown }).rows ?? (entry as { grid?: unknown }).grid : null;
+    const data = Array.isArray(entry) ? entry : entry && typeof entry === "object" ? (entry as { rows?: unknown; grid?: unknown; pixels?: unknown; data?: unknown }).pixels ?? (entry as { rows?: unknown }).rows ?? (entry as { grid?: unknown }).grid ?? (entry as { data?: unknown }).data : null;
     if (Array.isArray(data) && data.length >= width * height) {
-      const direct = data.slice(0, width * height).map(normalizeAiColor);
+      const direct = data.slice(0, width * height).map((color) => normalizeAiColor(color) ?? palette.get(String(color)) ?? null);
       if (direct.every((color): color is string => color !== null)) {
         frames.push(direct);
         continue;
@@ -129,14 +131,13 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
     }
     const rows = data;
     if (!Array.isArray(rows) || rows.length !== height) return null;
-    if (palette.length < 2 || palette.length > 10 || palette.some((color) => color === null)) return null;
+    if (palette.size < 2 || palette.size > 16) return null;
     const frame: Frame = [];
     for (const row of rows) {
-      const symbols = typeof row === "string" ? [...row.replace(/\s/g, "")] : Array.isArray(row) ? row : [];
+      const symbols = typeof row === "string" ? [...row.replace(/[\s,]/g, "")] : Array.isArray(row) ? row : [];
       if (symbols.length !== width) return null;
       for (const symbol of symbols) {
-        const index = Number(symbol);
-        const color = Number.isInteger(index) ? palette[index] : null;
+        const color = normalizeAiColor(symbol) ?? palette.get(String(symbol)) ?? null;
         if (!color) return null;
         frame.push(color);
       }
@@ -148,9 +149,12 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
-const parseModelJson = (content: string): unknown => JSON.parse(
-  content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""),
-);
+const parseModelJson = (content: string): unknown => {
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  return JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned);
+};
 
 async function remoteFrames(env: Env, prompt: string, width: number, height: number): Promise<RemoteResult> {
   const apiKey = env.DEEPSEEK_API_KEY || env.PIXELSKY_AI_API_KEY;
@@ -167,8 +171,9 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env.DEEPSEEK_MODEL || env.PIXELSKY_AI_MODEL || "deepseek-v4-flash",
+        thinking: { type: "disabled" },
         response_format: { type: "json_object" },
-        max_tokens: 3000,
+        max_tokens: 4096,
         stream: false,
         messages: [
           { role: "system", content: `You are a professional pixel-art animator for a physical LED matrix. Understand Simplified Chinese instructions as the primary input language. Create a recognizable subject that faithfully matches the user's request. Never replace it with an unrelated comet, line, dots, or abstract pattern. The canvas is exactly ${width}x${height}; design specifically for this tiny resolution with hard pixel edges, a centered readable silhouette, no antialiasing, and a limited high-contrast palette. Animation frames must preserve the same subject and change only the requested motion. Return one valid JSON object and no Markdown.` },
@@ -177,9 +182,10 @@ async function remoteFrames(env: Env, prompt: string, width: number, height: num
       }),
     });
     if (!response.ok) return { frames: null, status: "request_failed" };
-    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as { palette?: unknown; frames?: unknown };
-    const frames = normalizeModelFrames(parsed.frames, parsed.palette, width, height);
+    const payload = await response.json() as { choices?: Array<{ finish_reason?: string; message?: { content?: string } }> };
+    const parsed = parseModelJson(payload.choices?.[0]?.message?.content || "{}") as Record<string, unknown>;
+    const candidate = (parsed.animation ?? parsed.project ?? parsed.data ?? parsed.result ?? parsed) as Record<string, unknown>;
+    const frames = normalizeModelFrames(candidate.frames ?? candidate.pixels, candidate.palette ?? parsed.palette, width, height);
     return frames
       ? { frames, status: "ok" }
       : { frames: null, status: "invalid_response" };
