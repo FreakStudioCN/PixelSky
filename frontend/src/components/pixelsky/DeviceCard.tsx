@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { HELPER_BASE } from "@/lib/helper";
+import type { BoardProfile } from "@/lib/pixel";
 import { cn } from "@/lib/utils";
 
 interface DeviceCardProps {
@@ -15,7 +16,9 @@ interface DeviceCardProps {
   checking: boolean;
   ports: string[];
   port: string;
+  board: BoardProfile;
   onPortChange: (port: string) => void;
+  onBoardChange: (board: BoardProfile) => void;
   onRefresh: () => void;
   onUploadRuntime: () => void;
   onUploadAnimation: () => void;
@@ -27,7 +30,9 @@ export function DeviceCard({
   checking,
   ports,
   port,
+  board,
   onPortChange,
+  onBoardChange,
   onRefresh,
   onUploadRuntime,
   onUploadAnimation,
@@ -55,6 +60,13 @@ export function DeviceCard({
           {checking ? "检测中" : online ? "Helper 在线" : "Helper 离线"}
         </span>
       </div>
+
+      <label className="mt-3 grid gap-1 text-[10px] font-medium text-muted-foreground">开发板
+        <select value={board} onChange={(event) => onBoardChange(event.target.value as BoardProfile)} className="h-10 rounded-md border border-primary/35 bg-background px-3 text-xs font-semibold text-foreground outline-none focus:border-primary">
+          <option value="xiao_esp32c3">XIAO ESP32-C3（GPIO2）</option>
+          <option value="esp32_wroom">ESP32 WROOM / WROOM-32（GPIO5）</option>
+        </select>
+      </label>
 
       <div className="mt-3 flex items-center gap-2">
         <Select value={port} onValueChange={onPortChange} disabled={!ports.length}>
