@@ -35,12 +35,21 @@ const GLYPHS: Record<string, string[]> = {
   "°": ["11", "11", "00", "00", "00"], C: ["111", "100", "100", "100", "111"],
 };
 
+const TIME_GLYPHS: Record<string, string[]> = {
+  "0": ["11", "10", "10", "10", "11"], "1": ["01", "11", "01", "01", "11"],
+  "2": ["11", "01", "11", "10", "11"], "3": ["11", "01", "11", "01", "11"],
+  "4": ["10", "10", "11", "01", "01"], "5": ["11", "10", "11", "01", "11"],
+  "6": ["10", "10", "11", "10", "11"], "7": ["11", "01", "01", "01", "01"],
+  "8": ["11", "11", "11", "11", "11"], "9": ["11", "10", "11", "01", "01"],
+  ":": ["0", "1", "0", "1", "0"],
+};
+
 const makeFrame = (background: string) => Array.from({ length: 128 }, () => background || EMPTY);
 const set = (frame: Frame, x: number, y: number, color: string) => { if (x >= 0 && x < 16 && y >= 0 && y < 8) frame[y * 16 + x] = color; };
 
-const drawText = (text: string, colors: BasicColors): Frame => {
+const drawText = (text: string, colors: BasicColors, glyphSet = GLYPHS): Frame => {
   const frame = makeFrame(colors.background);
-  const glyphs = [...text].map((char) => GLYPHS[char] ?? GLYPHS["0"]);
+  const glyphs = [...text].map((char) => glyphSet[char] ?? glyphSet["0"]);
   const rawWidth = glyphs.reduce((sum, glyph) => sum + glyph[0].length, 0);
   const spacedGaps = Math.min(Math.max(0, glyphs.length - 1), Math.max(0, 16 - rawWidth));
   const width = rawWidth + spacedGaps;
@@ -111,7 +120,7 @@ export const renderBasicFrame = (display: BasicDisplay, now: Date, temperature: 
   }
   const hour = String(now.getHours()).padStart(2, "0");
   const minute = String(now.getMinutes()).padStart(2, "0");
-  return drawText(`${hour}:${minute}`, colors);
+  return drawText(`${hour}:${minute}`, colors, TIME_GLYPHS);
 };
 
 export const blankBasicFrame = () => emptyFrame(16, 8);
