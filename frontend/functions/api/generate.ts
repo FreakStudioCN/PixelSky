@@ -149,7 +149,7 @@ const normalizeModelFrames = (value: unknown, paletteValue: unknown, width: numb
 
 type RemoteResult = { frames: Frame[] | null; status: "ok" | "not_configured" | "request_failed" | "invalid_response" };
 
-const hasVisibleSubject = (frames: Frame[], width: number, height: number) => frames.some((frame) => {
+const hasVisibleSubject = (frames: Frame[], width: number, height: number) => frames.every((frame) => {
   const counts = new Map<string, number>();
   frame.forEach((color) => counts.set(color, (counts.get(color) || 0) + 1));
   const largestArea = Math.max(...counts.values());
