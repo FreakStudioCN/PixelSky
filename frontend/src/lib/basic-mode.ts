@@ -4,11 +4,7 @@ export type BasicDisplay = "time" | "temperature" | "weather";
 export type WeatherKind = "sunny" | "partly-cloudy" | "cloudy" | "rain" | "thunderstorm" | "snow" | "fog";
 
 export interface BasicColors {
-  primary: string;
-  cloud: string;
-  precipitation: string;
-  accent: string;
-  background: string;
+  text: string;
 }
 
 export const WEATHER_LABELS: Record<WeatherKind, string> = {
@@ -35,18 +31,18 @@ const GLYPHS: Record<string, string[]> = {
   "°": ["11", "11", "00", "00", "00"], C: ["111", "100", "100", "100", "111"],
 };
 
-const makeFrame = (background: string) => Array.from({ length: 128 }, () => background || EMPTY);
+const makeFrame = (background = EMPTY) => Array.from({ length: 128 }, () => background);
 const set = (frame: Frame, x: number, y: number, color: string) => { if (x >= 0 && x < 16 && y >= 0 && y < 8) frame[y * 16 + x] = color; };
 
 const drawText = (text: string, colors: BasicColors): Frame => {
-  const frame = makeFrame(colors.background);
+  const frame = makeFrame();
   const glyphs = [...text].map((char) => GLYPHS[char] ?? GLYPHS["0"]);
   const rawWidth = glyphs.reduce((sum, glyph) => sum + glyph[0].length, 0);
   const spacedGaps = Math.min(Math.max(0, glyphs.length - 1), Math.max(0, 16 - rawWidth));
   const width = rawWidth + spacedGaps;
   let x = Math.max(0, Math.floor((16 - width) / 2));
   glyphs.forEach((glyph, index) => {
-    glyph.forEach((row, y) => [...row].forEach((value, offset) => { if (value === "1") set(frame, x + offset, y + 1, colors.cloud); }));
+    glyph.forEach((row, y) => [...row].forEach((value, offset) => { if (value === "1") set(frame, x + offset, y + 1, colors.text); }));
     x += glyph[0].length + (index < spacedGaps ? 1 : 0);
   });
   return frame;
@@ -83,28 +79,22 @@ export const WEATHER_TEMPLATES: Record<WeatherKind, string[]> = {
   ],
 };
 
-const dimHex = (hex: string, factor: number) => {
-  const clean = hex.replace("#", "");
-  const channels = [0, 2, 4].map((index) => Math.round(parseInt(clean.slice(index, index + 2), 16) * factor));
-  return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
-};
-
-export const renderWeather = (kind: WeatherKind, colors: BasicColors): Frame => {
-  const frame = makeFrame(colors.background);
+export const renderWeather = (kind: WeatherKind): Frame => {
+  const frame = makeFrame();
   const roleColors: Record<string, string> = {
-    P: colors.primary,
-    H: colors.accent,
-    C: kind === "cloudy" ? dimHex(colors.cloud, .56) : colors.cloud,
-    R: colors.precipitation,
-    S: colors.cloud,
-    M: colors.cloud,
+    P: "#FF7A45",
+    H: "#FFD166",
+    C: kind === "cloudy" ? "#8E8E8E" : "#F8FAFC",
+    R: "#7DF9FF",
+    S: "#F8FAFC",
+    M: "#F8FAFC",
   };
   WEATHER_TEMPLATES[kind].forEach((row, y) => [...row].forEach((role, x) => { if (role !== ".") set(frame, x, y, roleColors[role]); }));
   return frame;
 };
 
 export const renderBasicFrame = (display: BasicDisplay, now: Date, temperature: number | null, weather: WeatherKind, colors: BasicColors): Frame => {
-  if (display === "weather") return renderWeather(weather, colors);
+  if (display === "weather") return renderWeather(weather);
   if (display === "temperature") {
     const rounded = Math.max(-99, Math.min(99, Math.round(temperature ?? 0)));
     return drawText(`${rounded}°C`, colors);
