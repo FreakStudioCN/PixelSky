@@ -36,17 +36,17 @@ const GLYPHS: Record<string, string[]> = {
 const makeFrame = (background = EMPTY) => Array.from({ length: 128 }, () => background);
 const set = (frame: Frame, x: number, y: number, color: string) => { if (x >= 0 && x < 16 && y >= 0 && y < 8) frame[y * 16 + x] = color; };
 
-const drawText = (text: string, colors: BasicColors, colorForIndex?: (index: number) => string): Frame => {
+const drawText = (text: string, colors: BasicColors, colorForIndex?: (index: number) => string, customGaps?: number[]): Frame => {
   const frame = makeFrame();
   const glyphs = [...text].map((char) => GLYPHS[char] ?? GLYPHS["0"]);
   const rawWidth = glyphs.reduce((sum, glyph) => sum + glyph[0].length, 0);
-  const spacedGaps = Math.min(Math.max(0, glyphs.length - 1), Math.max(0, 16 - rawWidth));
-  const width = rawWidth + spacedGaps;
+  const spacedGaps = customGaps ?? Array.from({ length: Math.min(Math.max(0, glyphs.length - 1), Math.max(0, 16 - rawWidth)) }, () => 1);
+  const width = rawWidth + spacedGaps.reduce((sum, gap) => sum + gap, 0);
   let x = Math.max(0, Math.floor((16 - width) / 2));
   glyphs.forEach((glyph, index) => {
     const glyphColor = colorForIndex?.(index) ?? colors.text;
     glyph.forEach((row, y) => [...row].forEach((value, offset) => { if (value === "1") set(frame, x + offset, y + 1, glyphColor); }));
-    x += glyph[0].length + (index < spacedGaps ? 1 : 0);
+    x += glyph[0].length + (spacedGaps[index] ?? 0);
   });
   return frame;
 };
@@ -104,7 +104,7 @@ export const renderBasicFrame = (display: BasicDisplay, now: Date, temperature: 
   }
   const hour = String(now.getHours()).padStart(2, "0");
   const minute = String(now.getMinutes()).padStart(2, "0");
-  return drawText(`${hour}${minute}`, colors, (index) => index < 2 ? colors.hour : colors.minute);
+  return drawText(`${hour}${minute}`, colors, (index) => index < 2 ? colors.hour : colors.minute, [1, 2, 1]);
 };
 
 export const blankBasicFrame = () => emptyFrame(16, 8);
