@@ -24,14 +24,8 @@ app.add_middleware(
     allow_origin_regex=r'https://([a-z0-9-]+\.)?pixelsky\.pages\.dev',
     allow_methods=['GET', 'POST'],
     allow_headers=['*'],
+    allow_private_network=True,
 )
-
-@app.middleware('http')
-async def allow_local_device_bridge(request, call_next):
-    response = await call_next(request)
-    if request.headers.get('access-control-request-private-network') == 'true':
-        response.headers['Access-Control-Allow-Private-Network'] = 'true'
-    return response
 
 class Project(BaseModel):
     version: int = 1

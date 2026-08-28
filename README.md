@@ -24,6 +24,8 @@ Workshop 课前部署见 [WORKSHOP.md](WORKSHOP.md)，环境检查可运行 `scr
 
 `frontend/functions` 提供 Pages Functions 云端 API，线上前端会调用 `/api/generate`；串口、烧录和 `mpremote` 仍由连接设备电脑上的本地 Helper 处理。
 
+因此，访问 `https://pixelsky.pages.dev/` 的每位用户都需要在**连接 ESP32 的那台 Windows 电脑**上启动 Helper；云端服务器无法访问用户电脑的 USB。线上页面在 Helper 离线时提供“Windows 一键安装器”，安装后会启动 `127.0.0.1:8765` 并在桌面创建 `PixelSky Helper` 快捷方式。Helper 仅监听本机回环地址，不会暴露到局域网或公网。
+
 ```powershell
 cd frontend
 npm run build

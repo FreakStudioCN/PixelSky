@@ -109,7 +109,7 @@ export default function App() {
   const refreshPorts = useCallback(async () => {
     setChecking(true);
     try { await getHealth(); const found = await getPorts(); setOnline(true); setPorts(found); setPort((current) => found.includes(current) ? current : (found[0] ?? "")); tell(found.length ? `发现 ${found.length} 个串口` : "Helper 在线，暂未发现设备"); }
-    catch (error) { setOnline(false); setPorts([]); tell(error instanceof Error ? error.message : "无法连接本地 Helper", true); }
+    catch (error) { setOnline(false); setPorts([]); tell(error instanceof Error ? error.message : "请先安装并启动本机硬件桥接", true); }
     finally { setChecking(false); }
   }, [tell]);
 
@@ -280,7 +280,7 @@ export default function App() {
       <div className="xl:col-span-2"><CodePanel project={activeProject} /></div>
       <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} chip={chip} busy={workshopBusy} onChipChange={setChip} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onFlash={() => void workshopAction("flash")} onDeploy={() => void workshopAction("deploy")} /></div>
     </main>
-      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本地服务已连接" : "○ 离线编辑模式"}</span><span>{activeProject.board === "esp32_wroom" ? "ESP32 WROOM" : "XIAO ESP32-C3"} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {activeProject.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.5</span></div></footer>
+      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本机 Helper 已连接" : "○ 离线编辑 · 硬件需本机 Helper"}</span><span>{activeProject.board === "esp32_wroom" ? "ESP32 WROOM" : "XIAO ESP32-C3"} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {activeProject.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.6</span></div></footer>
     {notice && <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-destructive/60 bg-destructive/20" : "border-primary/50 bg-surface-raised"}`}><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)} aria-label="关闭提示"><X className="h-4 w-4" /></button></div>}
   </div>;
 }

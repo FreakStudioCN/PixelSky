@@ -1,5 +1,6 @@
 import unittest
-from main import Project, animation, config, firmware_target
+from fastapi.middleware.cors import CORSMiddleware
+from main import Project, animation, app, config, firmware_target
 
 class MainTests(unittest.TestCase):
     def project(self):
@@ -26,6 +27,11 @@ class MainTests(unittest.TestCase):
         self.assertEqual(firmware_target('esp32s2'), ('esp32s2', '0x1000'))
         self.assertEqual(firmware_target('esp32s3'), ('esp32s3', '0x0'))
         self.assertEqual(firmware_target('esp32c3'), ('esp32c3', '0x0'))
+
+    def test_cloud_page_can_reach_private_network_helper(self):
+        cors = next(middleware for middleware in app.user_middleware if middleware.cls is CORSMiddleware)
+        self.assertTrue(cors.kwargs['allow_private_network'])
+        self.assertIn('https://pixelsky.pages.dev', cors.kwargs['allow_origins'])
 
     def test_animation_durations(self):
         project = self.project()
