@@ -7,7 +7,7 @@ export type Frame = string[];
 export type CanvasPreset = "8x8" | "16x8" | "16x16";
 export type ViewMode = "creative" | "hardware";
 export type PixelOrder = "RGB" | "GRB" | "BGR" | "BRG" | "RBG" | "GBR";
-export type MatrixLayout = "column-major-rtl" | "row-serpentine";
+export type MatrixLayout = "column-major-rtl" | "row-serpentine" | "row-major";
 export type EspChip = "esp32" | "esp32s2" | "esp32s3" | "esp32c3";
 export type BoardProfile = "xiao_esp32c3" | "esp32_wroom";
 
@@ -155,6 +155,7 @@ export const parseProject = (raw: string): PixelProject => {
     : 20;
   const sanitized = sanitizeFrames(converted, size.width, size.height);
   const safeFps = Number.isFinite(fps) ? Math.min(10, Math.max(1, Math.round(fps))) : 5;
+  const rawMatrixLayout = object.matrix_layout ?? object.mapping;
   return {
     version: 1,
     name: typeof object.name === "string" && object.name.trim() ? object.name : numeric ? "导入的 RGB565 动画" : "导入的动画",
@@ -169,7 +170,7 @@ export const parseProject = (raw: string): PixelProject => {
     board: object.board === "esp32_wroom" ? "esp32_wroom" : "xiao_esp32c3",
     pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : 2,
     pixel_order: (["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"].includes(String(object.pixel_order)) ? String(object.pixel_order) : "GRB") as PixelOrder,
-    matrix_layout: (object.matrix_layout === "row-serpentine" ? "row-serpentine" : "column-major-rtl") as MatrixLayout,
+    matrix_layout: (["column-major-rtl", "row-serpentine", "row-major"].includes(String(rawMatrixLayout)) ? String(rawMatrixLayout) : "column-major-rtl") as MatrixLayout,
     flip_h: Boolean(object.flip_h),
     flip_v: Boolean(object.flip_v),
     rotate: ([0, 90, 180, 270].includes(Number(object.rotate)) ? Number(object.rotate) : 0) as 0 | 90 | 180 | 270,
@@ -187,6 +188,9 @@ export const resizeFrames = (frames: Frame[], oldWidth: number, oldHeight: numbe
 });
 
 export const hardwareIndex = (x: number, y: number, width: number, moduleSize = MODULE_SIZE, layout: MatrixLayout = "column-major-rtl"): number => {
+  // One-piece panels use a single continuous row-major LED chain. Unlike the
+  // modular layouts below, their numbering must not restart at each 8x8 seam.
+  if (layout === "row-major") return y * width + x;
   const modulesPerRow = Math.ceil(width / moduleSize);
   const moduleX = Math.floor(x / moduleSize);
   const moduleY = Math.floor(y / moduleSize);

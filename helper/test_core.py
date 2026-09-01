@@ -25,6 +25,13 @@ class Tests(unittest.TestCase):
         self.assertEqual(mapped_hardware_index(0, 0, 16, 8, flip_h=True), 64)
         self.assertEqual(mapped_hardware_index(0, 0, 8, 8, rotate=90), 0)
 
+    def test_one_piece_panel_row_major_mapping(self):
+        self.assertEqual(hardware_index(0, 0, 16, layout='row-major'), 0)
+        self.assertEqual(hardware_index(15, 0, 16, layout='row-major'), 15)
+        self.assertEqual(hardware_index(0, 1, 16, layout='row-major'), 16)
+        self.assertEqual(hardware_index(15, 7, 16, layout='row-major'), 127)
+        self.assertEqual(mapped_hardware_index(0, 0, 16, 8, flip_h=True, layout='row-major'), 15)
+
     def test_invalid(self):
         with self.assertRaises(ValueError):
             validate_frames([['#000000']], 16, 8)
