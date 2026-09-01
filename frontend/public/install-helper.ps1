@@ -12,7 +12,7 @@ Write-Host 'This local service lets pixelsky.pages.dev access the ESP32 connecte
 try {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
     Write-Host '[1/4] Downloading the latest helper...'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/erkou111/PixelSky/archive/refs/heads/main.zip' -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/FreakStudioCN/PixelSky/archive/refs/heads/main.zip' -OutFile $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $tempRoot -Force
 
     New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
