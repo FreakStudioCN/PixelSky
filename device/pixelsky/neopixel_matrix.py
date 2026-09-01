@@ -11,6 +11,8 @@ def rgb565_to_rgb888(value):
 
 def physical_index(x, y, width, module_width=8, layout="column-major-rtl"):
     """Map a coordinate to the selected wiring layout inside each module."""
+    if layout == "row-major":
+        return y * width + x
     module_x = x // module_width
     module_y = y // module_width
     modules_per_row = (width + module_width - 1) // module_width
@@ -41,7 +43,7 @@ class NeoPixelMatrix:
         self.height = int(height)
         self.count = self.width * self.height
         self.module_width = int(module_width)
-        self.layout = layout if layout in ("column-major-rtl", "row-serpentine") else "column-major-rtl"
+        self.layout = layout if layout in ("column-major-rtl", "row-serpentine", "row-major") else "column-major-rtl"
         self.flip_h = bool(flip_h)
         self.flip_v = bool(flip_v)
         self.rotate = int(rotate) if int(rotate) in (0, 90, 180, 270) else 0

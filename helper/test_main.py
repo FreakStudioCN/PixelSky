@@ -15,6 +15,11 @@ class MainTests(unittest.TestCase):
         self.assertEqual(data['rotate'], 90)
         self.assertEqual(data['gamma'], 2.2)
 
+    def test_row_major_layout_is_accepted_and_exported(self):
+        project = Project(width=16, height=8, frames=[['#000000'] * 128], matrix_layout='row-major')
+        self.assertEqual(config(project)['matrix_layout'], 'row-major')
+        self.assertEqual(animation(project)['mapping'], 'row-major')
+
     def test_esp32_wroom_profile(self):
         project = Project(width=8, height=8, frames=[['#000000'] * 64], board='esp32_wroom', pin=5)
         data = config(project)

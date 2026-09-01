@@ -53,7 +53,7 @@ npx wrangler pages secret put DEEPSEEK_API_KEY --project-name pixelsky
 
 AI 环境变量：`DEEPSEEK_API_KEY`；可选 `DEEPSEEK_MODEL`。高级兼容配置仍支持 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY`、`PIXELSKY_AI_MODEL`。
 
-硬件默认 GPIO2、GRB、右起逐列、亮度 0.2。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地；校准面板也可切换为逐行蛇形走线。
+硬件默认 GPIO2、GRB、右起逐列、亮度 0.2。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地；校准面板也可切换为逐行蛇形走线。对于灯珠编号为 `0..15`、`16..31` 直至 `112..127` 的一体式 16×8 面板，选择“逐行同向（一体面板）”；ESP32 SuperMini（ESP32-C3）测试板的数据脚填写 GPIO8。
 
 XIAO ESP32-C3 接线：`D0/GPIO2 → 首块 DI`，首块 `DO → 次块 DI`；两块矩阵的 `V` 接外置 5V，两块 `G`、电源负极和 XIAO `GND` 必须共地。完整运行时位于 `device/`，由本地 Helper 通过 `mpremote` 上传。
 

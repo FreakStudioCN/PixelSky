@@ -24,6 +24,8 @@ type SpeechRecognitionLike = { lang: string; continuous: boolean; interimResults
 type SpeechConstructor = new () => SpeechRecognitionLike;
 declare global { interface Window { SpeechRecognition?: SpeechConstructor; webkitSpeechRecognition?: SpeechConstructor } }
 
+const matrixLayoutLabel = (layout: PixelProject["matrix_layout"]) => layout === "column-major-rtl" ? "右起逐列" : layout === "row-serpentine" ? "逐行蛇形" : "逐行同向";
+
 export default function App() {
   const initial = useMemo(() => createProject("我的像素作品"), []);
   const [name, setName] = useState(initial.name);
@@ -266,7 +268,7 @@ export default function App() {
             <span className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground"><Grid3X3 className="h-3.5 w-3.5" />{activeWidth * activeHeight} PIXELS</span>
           </div>
         </div>
-        {viewMode === "hardware" && <p className="mb-3 rounded-md border border-ai/30 bg-ai/10 px-3 py-2 text-[11px] text-ai">LED 编号按模块行优先排列，每块 8×8 使用{activeProject.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"}走线；紫色边界表示模块拼接线。硬件视图只读。</p>}
+        {viewMode === "hardware" && <p className="mb-3 rounded-md border border-ai/30 bg-ai/10 px-3 py-2 text-[11px] text-ai">LED 使用{matrixLayoutLabel(activeProject.matrix_layout)}编号{activeProject.matrix_layout === "row-major" ? "，整块面板每行均从左向右连续排列" : "，按 8×8 模块行优先拼接；紫色边界表示模块拼接线"}。硬件视图只读。</p>}
         <PixelCanvas frame={shownFrame} width={activeWidth} height={activeHeight} viewMode={viewMode} readOnly={creationMode === "basic" || viewMode === "hardware"} hardware={activeProject} onStrokeStart={snapshot} onStrokeEnd={() => undefined} onPaint={(index) => setFrames((items) => items.map((frame, frameIndex) => frameIndex === activeIndex ? frame.map((value, pixelIndex) => pixelIndex === index ? (tool === "eraser" ? EMPTY : color) : value) : frame))} />
         {creationMode === "custom" && <div className="mt-4"><ToolStrip tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} onClear={() => replaceFrames(frames.map((frame, index) => index === activeIndex ? emptyFrame(width, height) : frame))} onUndo={undo} onRedo={redo} canUndo={history.length > 0} canRedo={future.length > 0} /></div>}
       </section>
@@ -280,7 +282,7 @@ export default function App() {
       <div className="xl:col-span-2"><CodePanel project={activeProject} /></div>
       <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} chip={chip} busy={workshopBusy} onChipChange={setChip} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onFlash={() => void workshopAction("flash")} onDeploy={() => void workshopAction("deploy")} /></div>
     </main>
-      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本机 Helper 已连接" : "○ 离线编辑 · 硬件需本机 Helper"}</span><span>{activeProject.board === "esp32_wroom" ? "ESP32 WROOM" : "XIAO ESP32-C3"} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {activeProject.matrix_layout === "column-major-rtl" ? "右起逐列" : "逐行蛇形"} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.6</span></div></footer>
+      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本机 Helper 已连接" : "○ 离线编辑 · 硬件需本机 Helper"}</span><span>{activeProject.board === "esp32_wroom" ? "ESP32 WROOM" : "XIAO ESP32-C3"} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {matrixLayoutLabel(activeProject.matrix_layout)} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.6</span></div></footer>
     {notice && <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-destructive/60 bg-destructive/20" : "border-primary/50 bg-surface-raised"}`}><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)} aria-label="关闭提示"><X className="h-4 w-4" /></button></div>}
   </div>;
 }

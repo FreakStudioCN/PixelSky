@@ -19,6 +19,12 @@ class DeviceMatrixTests(unittest.TestCase):
         self.assertEqual(physical_index(0, 0, 8, layout='row-serpentine'), 0)
         self.assertEqual(physical_index(0, 1, 8, layout='row-serpentine'), 15)
 
+    def test_one_piece_panel_row_major_mapping(self):
+        self.assertEqual(physical_index(0, 0, 16, layout='row-major'), 0)
+        self.assertEqual(physical_index(15, 0, 16, layout='row-major'), 15)
+        self.assertEqual(physical_index(0, 1, 16, layout='row-major'), 16)
+        self.assertEqual(physical_index(15, 7, 16, layout='row-major'), 127)
+
     def test_rgb565_conversion(self):
         self.assertEqual(rgb565_to_rgb888(0xF800), (255, 0, 0))
         self.assertEqual(rgb565_to_rgb888(0x07E0), (0, 255, 0))

@@ -46,7 +46,9 @@ def run():
         height=height,
         pin=int(config.get("pin", 2)),
         module_width=int(config.get("module_width", 8)),
-        layout=config.get("matrix_layout", "column-major-rtl"),
+        # Animation-only uploads include the current Web layout as `mapping`.
+        # Prefer it so changing panel type does not require a full redeploy.
+        layout=animation.get("mapping", config.get("matrix_layout", "column-major-rtl")),
         pixel_order=config.get("pixel_order", "GRB"),
         brightness=safe_brightness,
         flip_h=config.get("flip_h", False),

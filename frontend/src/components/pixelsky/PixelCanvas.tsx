@@ -88,7 +88,7 @@ export function PixelCanvas({ frame, width, height, viewMode, readOnly = false, 
               className={cn(
                 "relative aspect-square rounded-[3px] transition-shadow duration-150",
                 isEmpty ? "border border-grid" : "border border-transparent",
-                viewMode === "hardware" && (x % 8 === 0 || y % 8 === 0) && "ring-1 ring-inset ring-ai/50",
+                viewMode === "hardware" && hardware.matrix_layout !== "row-major" && (x % 8 === 0 || y % 8 === 0) && "ring-1 ring-inset ring-ai/50",
               )}
               style={{
                 backgroundColor: color,

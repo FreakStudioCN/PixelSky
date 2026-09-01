@@ -41,7 +41,7 @@ class Project(BaseModel):
     board: Literal['xiao_esp32c3', 'esp32_wroom'] = 'xiao_esp32c3'
     pin: int = Field(default=2, ge=0, le=48)
     pixel_order: Literal['RGB', 'GRB', 'BGR', 'BRG', 'RBG', 'GBR'] = 'GRB'
-    matrix_layout: Literal['column-major-rtl', 'row-serpentine'] = 'column-major-rtl'
+    matrix_layout: Literal['column-major-rtl', 'row-serpentine', 'row-major'] = 'column-major-rtl'
     flip_h: bool = False
     flip_v: bool = False
     rotate: Literal[0, 90, 180, 270] = 0

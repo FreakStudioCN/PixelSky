@@ -37,6 +37,8 @@ def validate_frames(frames, width: int = 16, height: int = 8) -> list[list[str]]
     return [[normalize_hex(c) for c in f] for f in out]
 
 def hardware_index(x: int, y: int, width: int, module_size: int = 8, layout: str = 'column-major-rtl') -> int:
+    if layout == 'row-major':
+        return y * width + x
     modules_per_row = (width + module_size - 1) // module_size
     module_x, module_y = x // module_size, y // module_size
     local_x, local_y = x % module_size, y % module_size
@@ -47,7 +49,7 @@ def hardware_index(x: int, y: int, width: int, module_size: int = 8, layout: str
         module_pixel = (module_size - 1 - local_x) * module_size + local_y
     return module_index * module_size * module_size + module_pixel
 
-def mapped_hardware_index(x: int, y: int, width: int, height: int, flip_h=False, flip_v=False, rotate=0) -> int:
+def mapped_hardware_index(x: int, y: int, width: int, height: int, flip_h=False, flip_v=False, rotate=0, layout='column-major-rtl') -> int:
     if flip_h: x = width - 1 - x
     if flip_v: y = height - 1 - y
     physical_width = width
@@ -57,7 +59,7 @@ def mapped_hardware_index(x: int, y: int, width: int, height: int, flip_h=False,
         x, y = width - 1 - x, height - 1 - y
     elif rotate == 270:
         x, y, physical_width = y, width - 1 - x, height
-    return hardware_index(x, y, physical_width)
+    return hardware_index(x, y, physical_width, layout=layout)
 
 def fallback_frames(prompt: str, count: int = 4, width: int = 16, height: int = 8) -> list[list[str]]:
     validate_size(width, height)

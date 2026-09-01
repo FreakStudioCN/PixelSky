@@ -1,1 +1,1 @@
-{"width":16,"height":8,"pin":2,"pixel_order":"GRB","snake":true,"module_width":8,"module_order":"row-major","flip_h":false,"flip_v":false,"rotate":0,"gamma":1.0,"r_balance":1.0,"g_balance":1.0,"b_balance":1.0,"brightness":0.2,"fps":5}
+{"width":16,"height":8,"pin":2,"pixel_order":"GRB","matrix_layout":"column-major-rtl","module_width":8,"module_order":"row-major","flip_h":false,"flip_v":false,"rotate":0,"gamma":1.0,"r_balance":1.0,"g_balance":1.0,"b_balance":1.0,"brightness":0.2,"fps":5}
