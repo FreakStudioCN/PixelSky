@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { HELPER_BASE, HELPER_INSTALLER } from "@/lib/helper";
-import type { BoardProfile } from "@/lib/pixel";
+import { BOARD_PROFILES, type BoardProfile } from "@/lib/pixel";
 import { cn } from "@/lib/utils";
 
 interface DeviceCardProps {
@@ -78,8 +78,7 @@ export function DeviceCard({
 
       <label className="mt-3 grid gap-1 text-[10px] font-medium text-muted-foreground">开发板
         <select value={board} onChange={(event) => onBoardChange(event.target.value as BoardProfile)} className="h-10 rounded-md border border-primary/35 bg-background px-3 text-xs font-semibold text-foreground outline-none focus:border-primary">
-          <option value="xiao_esp32c3">XIAO ESP32-C3（GPIO2）</option>
-          <option value="esp32_wroom">ESP32 WROOM / WROOM-32（GPIO5）</option>
+          {BOARD_PROFILES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
         </select>
       </label>
 

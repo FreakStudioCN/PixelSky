@@ -1,12 +1,18 @@
 from __future__ import annotations
 import json
+import hashlib
+import html
+import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urljoin
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +23,15 @@ from core import fallback_frames, hex_to_rgb565, validate_frames, validate_size
 
 ROOT = Path(__file__).resolve().parents[1]
 DEVICE = ROOT / 'device'
-app = FastAPI(title='PixelSky Local Helper', version='0.4.0')
+CACHE_ROOT = Path(os.getenv('PIXELSKY_CACHE_DIR') or (Path(os.getenv('LOCALAPPDATA', Path.home())) / 'PixelSkyHelper' / 'cache'))
+FIRMWARE_BOARDS = {
+    'esp32': {'board': 'ESP32_GENERIC', 'page_url': 'https://micropython.org/download/ESP32_GENERIC/', 'esptool_chip': 'esp32', 'fallback_offset': '0x1000'},
+    'esp32s2': {'board': 'ESP32_GENERIC_S2', 'page_url': 'https://micropython.org/download/ESP32_GENERIC_S2/', 'esptool_chip': 'esp32s2', 'fallback_offset': '0x1000'},
+    'esp32s3': {'board': 'ESP32_GENERIC_S3', 'page_url': 'https://micropython.org/download/ESP32_GENERIC_S3/', 'esptool_chip': 'esp32s3', 'fallback_offset': '0x0'},
+    'esp32c3': {'board': 'ESP32_GENERIC_C3', 'page_url': 'https://micropython.org/download/ESP32_GENERIC_C3/', 'esptool_chip': 'esp32c3', 'fallback_offset': '0x0'},
+}
+FirmwareChip = Literal['esp32', 'esp32s2', 'esp32s3', 'esp32c3']
+app = FastAPI(title='PixelSky Local Helper', version='0.7.0')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['http://127.0.0.1:5173', 'http://localhost:5173', 'https://pixelsky.pages.dev'],
@@ -38,7 +52,7 @@ class Project(BaseModel):
     frame_durations: list[int] = Field(default_factory=list)
     frame_names: list[str] = Field(default_factory=list)
     loop: bool = True
-    board: Literal['xiao_esp32c3', 'esp32_wroom'] = 'xiao_esp32c3'
+    board: Literal['xiao_esp32c3', 'esp32c3_supermini', 'esp32_wroom'] = 'xiao_esp32c3'
     pin: int = Field(default=2, ge=0, le=48)
     pixel_order: Literal['RGB', 'GRB', 'BGR', 'BRG', 'RBG', 'GBR'] = 'GRB'
     matrix_layout: Literal['column-major-rtl', 'row-serpentine', 'row-major'] = 'column-major-rtl'
@@ -69,6 +83,15 @@ class PortRequest(BaseModel):
 class LedTestRequest(PortRequest):
     pin: int = Field(default=2, ge=0, le=48)
     count: int = Field(default=128, ge=1, le=256)
+
+class FirmwareRequest(BaseModel):
+    chip: FirmwareChip = 'esp32'
+
+class FirmwarePlanRequest(FirmwareRequest, PortRequest):
+    pass
+
+class FirmwareFlashRequest(FirmwarePlanRequest):
+    confirmed: bool = False
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=180)
@@ -105,11 +128,110 @@ def run_process(args: list[str], timeout: int = 90):
         raise HTTPException(500, output[-1200:] or '设备命令执行失败')
     return output
 
-def firmware_target(chip: str):
-    targets = {'esp32': ('esp32', '0x1000'), 'esp32s2': ('esp32s2', '0x1000'), 'esp32s3': ('esp32s3', '0x0'), 'esp32c3': ('esp32c3', '0x0')}
-    if chip not in targets:
+def firmware_board(chip: str):
+    if chip not in FIRMWARE_BOARDS:
         raise ValueError('unsupported ESP chip')
-    return targets[chip]
+    return FIRMWARE_BOARDS[chip]
+
+def fetch_url(url: str) -> bytes:
+    request = urllib.request.Request(url, headers={'User-Agent': 'PixelSky-Helper/0.7'})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = response.read(32 * 1024 * 1024 + 1)
+    except Exception as error:
+        raise HTTPException(502, f'无法访问 MicroPython 官方服务：{error}')
+    if not payload or len(payload) > 32 * 1024 * 1024:
+        raise HTTPException(502, '官方固件响应为空或超过 32MB')
+    return payload
+
+def parse_firmware_page(chip: str, page_html: str):
+    target = firmware_board(chip)
+    decoded = html.unescape(page_html)
+    command = re.search(r'--baud\s+(\d+)\s+write[_-]flash\s+(0x[0-9a-fA-F]+|\d+)\s+', decoded)
+    if not command:
+        raise ValueError('官方页面中未找到固件烧录命令')
+    board = target['board']
+    link = re.search(r'href=["\']([^"\']*/resources/firmware/' + re.escape(board) + r'-([0-9]{8})-(v[0-9]+\.[0-9]+(?:\.[0-9]+)?)\.bin)["\']', decoded)
+    if not link:
+        raise ValueError('官方页面中未找到 latest 稳定版 .bin 固件')
+    release_date = datetime.strptime(link.group(2), '%Y%m%d').date().isoformat()
+    return {
+        'chip': chip,
+        'board': board,
+        'page_url': target['page_url'],
+        'url': urljoin(target['page_url'], link.group(1)),
+        'filename': Path(link.group(1)).name,
+        'version': link.group(3),
+        'release_date': release_date,
+        'baud': int(command.group(1)),
+        'write_offset': hex(int(command.group(2), 0)),
+    }
+
+def resolve_firmware(chip: str):
+    target = firmware_board(chip)
+    try:
+        return parse_firmware_page(chip, fetch_url(target['page_url']).decode('utf-8'))
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(502, f'无法解析 MicroPython 官方固件页：{error}')
+
+def firmware_metadata_path(chip: str):
+    return CACHE_ROOT / 'firmware' / f'{chip}.json'
+
+def save_firmware(chip: str, metadata: dict, payload: bytes):
+    folder = CACHE_ROOT / 'firmware'
+    folder.mkdir(parents=True, exist_ok=True)
+    firmware_path = folder / metadata['filename']
+    firmware_path.write_bytes(payload)
+    saved = {**metadata, 'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(), 'cached': True}
+    firmware_metadata_path(chip).write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding='utf-8')
+    return saved
+
+def cached_firmware(chip: str):
+    metadata_file = firmware_metadata_path(chip)
+    if not metadata_file.is_file():
+        raise HTTPException(409, '尚未缓存该芯片的官方固件，请先下载')
+    try:
+        metadata = json.loads(metadata_file.read_text(encoding='utf-8'))
+        firmware_path = metadata_file.parent / Path(metadata['filename']).name
+    except Exception:
+        raise HTTPException(500, '固件缓存元数据损坏，请重新下载')
+    if not firmware_path.is_file() or firmware_path.stat().st_size != metadata.get('size'):
+        raise HTTPException(409, '固件缓存不完整，请重新下载')
+    if hashlib.sha256(firmware_path.read_bytes()).hexdigest() != metadata.get('sha256'):
+        raise HTTPException(409, '固件缓存校验失败，请重新下载')
+    return metadata, firmware_path
+
+def esptool_command_names():
+    result = subprocess.run([sys.executable, '-m', 'esptool', '--help'], capture_output=True, text=True, timeout=20, check=False)
+    output = f'{result.stdout}\n{result.stderr}'
+    if result.returncode:
+        raise HTTPException(500, output[-1200:] or '无法检查 esptool 命令')
+    erase = 'erase-flash' if 'erase-flash' in output else 'erase_flash'
+    write = 'write-flash' if 'write-flash' in output else 'write_flash'
+    return erase, write
+
+def build_firmware_plan(port: str, chip: str):
+    metadata, firmware_path = cached_firmware(chip)
+    erase, write = esptool_command_names()
+    target = firmware_board(chip)
+    return {
+        **metadata,
+        'port': port,
+        'tool': 'python -m esptool',
+        'esptool_chip': target['esptool_chip'],
+        'erase_first': True,
+        'erase_command': erase,
+        'write_command': write,
+        'firmware_path': str(firmware_path),
+        'confirmed_required': True,
+    }
+
+def firmware_target(chip: str):
+    """Compatibility helper retained for the manual/offline upload endpoint."""
+    target = firmware_board(chip)
+    return target['esptool_chip'], target['fallback_offset']
 
 def mpremote(port: str, args: list[str], timeout: int = 45):
     return run_process([sys.executable, '-m', 'mpremote', 'connect', port, *args], timeout)
@@ -134,7 +256,7 @@ def write_runtime(port: str, project: Project):
 
 @app.get('/health')
 def health():
-    return {'ok': True, 'service': 'pixelsky-helper', 'version': '0.6.0', 'features': ['flash', 'multi-chip', 'esp32-wroom', 'preflight', 'led-test', 'dynamic-canvas', 'matrix-calibration', 'matrix-layout', 'brightness-scale', 'frame-duration', 'frame-reorder']}
+    return {'ok': True, 'service': 'pixelsky-helper', 'version': '0.7.0', 'features': ['flash', 'firmware-resolve', 'firmware-download', 'firmware-cache', 'flash-plan', 'multi-chip', 'esp32-wroom', 'esp32c3-supermini', 'preflight', 'led-test', 'dynamic-canvas', 'matrix-calibration', 'matrix-layout', 'brightness-scale', 'frame-duration', 'frame-reorder']}
 
 @app.get('/api/ports')
 def ports():
@@ -174,9 +296,76 @@ def led_test(req: LedTestRequest):
     mpremote(req.port, ['exec', code], timeout=20)
     return {'ok': True, 'message': '红绿蓝灯板测试完成'}
 
+@app.get('/api/toolchain/status')
+def toolchain_status():
+    modules = {name: importlib.util.find_spec(name) is not None for name in ('esptool', 'mpremote', 'serial')}
+    return {
+        'ok': all(modules.values()),
+        'python': sys.version.split()[0],
+        'modules': modules,
+        'cache_dir': str(CACHE_ROOT),
+    }
+
+@app.post('/api/toolchain/install')
+def install_toolchain():
+    log = run_process([sys.executable, '-m', 'pip', 'install', 'esptool>=4.8,<6', 'mpremote>=1.25,<2', 'pyserial>=3.5,<4'], 300)
+    return {'ok': True, 'message': '设备工具链安装完成', 'log': log[-3000:]}
+
+@app.post('/api/firmware/resolve')
+def firmware_resolve(req: FirmwareRequest):
+    metadata = resolve_firmware(req.chip)
+    try:
+        cached, _ = cached_firmware(req.chip)
+        metadata['cached'] = cached.get('url') == metadata['url']
+    except HTTPException:
+        metadata['cached'] = False
+    return metadata
+
+@app.post('/api/firmware/download')
+def firmware_download(req: FirmwareRequest):
+    metadata = resolve_firmware(req.chip)
+    payload = fetch_url(metadata['url'])
+    return save_firmware(req.chip, metadata, payload)
+
+@app.post('/api/firmware/flash-plan')
+def firmware_flash_plan(req: FirmwarePlanRequest):
+    ensure_port(req.port)
+    return build_firmware_plan(req.port, req.chip)
+
+@app.post('/api/firmware/flash')
+def firmware_flash(req: FirmwareFlashRequest):
+    ensure_port(req.port)
+    if not req.confirmed:
+        raise HTTPException(400, '烧录会擦除设备，请先确认烧录计划')
+    plan = build_firmware_plan(req.port, req.chip)
+    erase = run_process([
+        sys.executable, '-m', 'esptool', '--chip', plan['esptool_chip'], '--port', req.port, plan['erase_command'],
+    ], 120)
+    flash = run_process([
+        sys.executable, '-m', 'esptool', '--chip', plan['esptool_chip'], '--port', req.port,
+        '--baud', str(plan['baud']), plan['write_command'], '-z', plan['write_offset'], plan['firmware_path'],
+    ], 180)
+    log_dir = CACHE_ROOT / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    log_path = log_dir / f'flash-{req.chip}-{timestamp}.log'
+    combined = f'{erase}\n{flash}'.strip()
+    log_path.write_text(combined, encoding='utf-8')
+    return {
+        'ok': True,
+        'message': 'MicroPython 官方固件烧录完成',
+        'chip': req.chip,
+        'version': plan['version'],
+        'offset': plan['write_offset'],
+        'log_file': str(log_path),
+        'log': combined[-3000:],
+    }
+
 @app.post('/api/flash-firmware')
-async def flash_firmware(port: str = Form(...), chip: Literal['esp32', 'esp32s2', 'esp32s3', 'esp32c3'] = Form('esp32'), firmware: UploadFile = File(...)):
+async def flash_firmware(port: str = Form(...), chip: FirmwareChip = Form('esp32'), confirmed: bool = Form(False), firmware: UploadFile = File(...)):
     ensure_port(port)
+    if not confirmed:
+        raise HTTPException(400, '烧录会擦除设备，请先确认')
     if not firmware.filename or not firmware.filename.lower().endswith('.bin'):
         raise HTTPException(400, '请选择 MicroPython .bin 固件')
     payload = await firmware.read(32 * 1024 * 1024 + 1)
