@@ -1,6 +1,8 @@
 export const MAX_FRAMES = 32;
 export const MIN_FRAME_DURATION = 100;
-export const EMPTY = "#07130F";
+// Empty LEDs must be true black. A tinted UI background becomes visible on the
+// physical matrix at high brightness because it is emitted as real RGB data.
+export const EMPTY = "#000000";
 export const MODULE_SIZE = 8;
 
 export type Frame = string[];

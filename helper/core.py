@@ -64,7 +64,7 @@ def mapped_hardware_index(x: int, y: int, width: int, height: int, flip_h=False,
 def fallback_frames(prompt: str, count: int = 4, width: int = 16, height: int = 8) -> list[list[str]]:
     validate_size(width, height)
     pixels = width * height
-    bg, mint, purple, pink, yellow, blue = '#07130F', '#31F5C3', '#9B7BFF', '#FF5A9D', '#FFCB5C', '#52B7FF'
+    bg, mint, purple, pink, yellow, blue = '#000000', '#31F5C3', '#9B7BFF', '#FF5A9D', '#FFCB5C', '#52B7FF'
     frames = [[bg] * pixels for _ in range(max(1, min(MAX_FRAMES, count)))]
     low = prompt.lower()
     if '爱心' in prompt or 'heart' in low:
