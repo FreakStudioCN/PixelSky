@@ -9,7 +9,19 @@ export type ViewMode = "creative" | "hardware";
 export type PixelOrder = "RGB" | "GRB" | "BGR" | "BRG" | "RBG" | "GBR";
 export type MatrixLayout = "column-major-rtl" | "row-serpentine" | "row-major";
 export type EspChip = "esp32" | "esp32s2" | "esp32s3" | "esp32c3";
-export type BoardProfile = "xiao_esp32c3" | "esp32_wroom";
+export type BoardProfile = "xiao_esp32c3" | "esp32c3_supermini" | "esp32_wroom";
+
+export const BOARD_PROFILES: Array<{ id: BoardProfile; label: string; defaultPin: number; firmwareChip: EspChip; firmwareBoard: string }> = [
+  { id: "xiao_esp32c3", label: "XIAO ESP32-C3", defaultPin: 2, firmwareChip: "esp32c3", firmwareBoard: "ESP32_GENERIC_C3" },
+  { id: "esp32c3_supermini", label: "ESP32-C3 SuperMini", defaultPin: 8, firmwareChip: "esp32c3", firmwareBoard: "ESP32_GENERIC_C3" },
+  { id: "esp32_wroom", label: "ESP32 WROOM / WROOM-32", defaultPin: 5, firmwareChip: "esp32", firmwareBoard: "ESP32_GENERIC" },
+];
+
+export const boardProfile = (board: BoardProfile) => BOARD_PROFILES.find((profile) => profile.id === board) ?? BOARD_PROFILES[0];
+export const boardDefaultPin = (board: BoardProfile) => boardProfile(board).defaultPin;
+export const boardFirmwareChip = (board: BoardProfile) => boardProfile(board).firmwareChip;
+export const boardFirmwareName = (board: BoardProfile) => boardProfile(board).firmwareBoard;
+export const boardLabel = (board: BoardProfile) => boardProfile(board).label;
 
 export interface PixelProject {
   version: 1;
@@ -156,6 +168,7 @@ export const parseProject = (raw: string): PixelProject => {
   const sanitized = sanitizeFrames(converted, size.width, size.height);
   const safeFps = Number.isFinite(fps) ? Math.min(10, Math.max(1, Math.round(fps))) : 5;
   const rawMatrixLayout = object.matrix_layout ?? object.mapping;
+  const parsedBoard = (["xiao_esp32c3", "esp32c3_supermini", "esp32_wroom"].includes(String(object.board)) ? String(object.board) : "xiao_esp32c3") as BoardProfile;
   return {
     version: 1,
     name: typeof object.name === "string" && object.name.trim() ? object.name : numeric ? "导入的 RGB565 动画" : "导入的动画",
@@ -167,8 +180,8 @@ export const parseProject = (raw: string): PixelProject => {
     frame_durations: sanitizeFrameDurations(rawDurations, sanitized.length, safeFps),
     frame_names: sanitizeFrameNames(rawNames, sanitized.length),
     loop: object.loop !== false,
-    board: object.board === "esp32_wroom" ? "esp32_wroom" : "xiao_esp32c3",
-    pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : 2,
+    board: parsedBoard,
+    pin: Number.isFinite(Number(object.pin)) ? Number(object.pin) : boardDefaultPin(parsedBoard),
     pixel_order: (["RGB", "GRB", "BGR", "BRG", "RBG", "GBR"].includes(String(object.pixel_order)) ? String(object.pixel_order) : "GRB") as PixelOrder,
     matrix_layout: (["column-major-rtl", "row-serpentine", "row-major"].includes(String(rawMatrixLayout)) ? String(rawMatrixLayout) : "column-major-rtl") as MatrixLayout,
     flip_h: Boolean(object.flip_h),

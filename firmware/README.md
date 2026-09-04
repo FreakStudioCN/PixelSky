@@ -1,17 +1,14 @@
 # MicroPython 固件目录
 
-将适用于目标 ESP32 型号的官方 MicroPython `.bin` 放在本目录。PixelSky 不固定捆绑某个硬件版本的固件，以避免误刷不同芯片。
+PixelSky 默认不捆绑固件。在 Web 页的“连接 ESP32”区域选择实际开发板后，“课前检查与快速部署”会自动匹配固件。点击“获取官方 latest 固件”后，本地 Helper 会从对应的 MicroPython 官方页面解析稳定版 `.bin`、发布日期、baud 和写入 offset，下载到用户缓存并进行 SHA-256 校验。
 
-在 Web 页的 **Workshop Deploy** 区域选择该文件和芯片型号后，可执行擦除和烧录。ESP32 Generic 与 ESP32-S2 使用 `0x1000`，ESP32-S3 与 ESP32-C3 使用 `0x0`。固件必须与所选芯片一致。
+页面会在烧录前显示固件、串口和写入计划。用户必须明确勾选擦除确认，Helper 才会先擦除 Flash、再使用页面解析出的参数写入固件，并将烧录日志保存到缓存目录。不能联网时仍可展开“离线备用”，手动选择与芯片匹配的 `.bin`。
 
-- ESP32：https://micropython.org/download/ESP32_GENERIC/
-- ESP32-S2：https://micropython.org/download/ESP32_GENERIC_S2/
-- ESP32-S3：https://micropython.org/download/ESP32_GENERIC_S3/
-- ESP32-C3：https://micropython.org/download/ESP32_GENERIC_C3/
+- XIAO ESP32-C3 → `ESP32_GENERIC_C3`：https://micropython.org/download/ESP32_GENERIC_C3/
+- ESP32-C3 SuperMini → `ESP32_GENERIC_C3`：https://micropython.org/download/ESP32_GENERIC_C3/
+- ESP32 WROOM / WROOM-32 → `ESP32_GENERIC`：https://micropython.org/download/ESP32_GENERIC/
 
-XIAO ESP32-C3 建议使用板级固件：https://micropython.org/download/SEEED_XIAO_ESP32C3/
-
-ESP32 WROOM / WROOM-32 开发板请选择 **ESP32 Generic** 固件，Web 端板卡选择 **ESP32 WROOM DevKit**，烧录芯片选择 **ESP32 Generic · 0x1000**。默认 LED 数据脚为 GPIO5。
+开发板选项会预设灯板数据 GPIO：XIAO 为 GPIO2、SuperMini 为 GPIO8、WROOM 为 GPIO5。GPIO 并非固定绑定，实际接线不同时可在校准区域修改。
 
 烧录后点击“上传完整运行时”会写入：
 

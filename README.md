@@ -18,7 +18,7 @@ Web：`http://127.0.0.1:5173`；Helper 只监听 `127.0.0.1:8765`。
 
 媒体转换支持图片、视频、动态 GIF 和 1–4 个字符，提供亮度、对比度与饱和度调整，并兼容 NeopixelMatrixTool 的 `{pixels,width,height,description,version}` RGB565 JSON。矩阵校准支持六种颜色顺序、翻转、旋转、Gamma 与 RGB 通道平衡。
 
-Workshop 课前部署见 [WORKSHOP.md](WORKSHOP.md)，环境检查可运行 `scripts\workshop-check.ps1`。固件放置说明见 `firmware\README.md`。
+Workshop 课前部署见 [WORKSHOP.md](WORKSHOP.md)，环境检查可运行 `scripts\workshop-check.ps1`。Helper 可从 MicroPython 官方页面解析、下载并缓存 latest 稳定版固件；离线手动固件说明见 `firmware\README.md`。
 
 ## Cloudflare 部署
 
@@ -53,11 +53,11 @@ npx wrangler pages secret put DEEPSEEK_API_KEY --project-name pixelsky
 
 AI 环境变量：`DEEPSEEK_API_KEY`；可选 `DEEPSEEK_MODEL`。高级兼容配置仍支持 `PIXELSKY_AI_BASE_URL`、`PIXELSKY_AI_API_KEY`、`PIXELSKY_AI_MODEL`。
 
-硬件默认 GPIO2、GRB、右起逐列、亮度 0.2。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地；校准面板也可切换为逐行蛇形走线。对于灯珠编号为 `0..15`、`16..31` 直至 `112..127` 的一体式 16×8 面板，选择“逐行同向（一体面板）”；ESP32 SuperMini（ESP32-C3）测试板的数据脚填写 GPIO8。
+硬件默认 GRB、右起逐列、亮度 0.2。开发板选择会自动预设可编辑的数据 GPIO 和固件类型：XIAO ESP32-C3 为 GPIO2 / `ESP32_GENERIC_C3`，ESP32-C3 SuperMini 为 GPIO8 / `ESP32_GENERIC_C3`，ESP32 WROOM / WROOM-32 为 GPIO5 / `ESP32_GENERIC`。两块 8×8 矩阵按一行串接，独立稳定供电并与 ESP32 共地；校准面板也可切换为逐行蛇形走线。
 
 XIAO ESP32-C3 接线：`D0/GPIO2 → 首块 DI`，首块 `DO → 次块 DI`；两块矩阵的 `V` 接外置 5V，两块 `G`、电源负极和 XIAO `GND` 必须共地。完整运行时位于 `device/`，由本地 Helper 通过 `mpremote` 上传。
 
-ESP32 WROOM DevKit 接线：在“矩阵方向与色彩校准”中选择 **ESP32 WROOM DevKit**，默认使用 `GPIO5 → 首块 DI`；矩阵接稳定 5V，矩阵 GND、电源负极和 ESP32 GND 共地。烧录时使用 ESP32 Generic 固件并选择 `ESP32 Generic · 0x1000`。
+ESP32 WROOM 接线：选择 **ESP32 WROOM / WROOM-32**，默认使用 `GPIO5 → 首块 DI`；矩阵接稳定 5V，矩阵 GND、电源负极和 ESP32 GND 共地。页面会自动匹配 `ESP32_GENERIC`，offset 和 baud 由 Helper 从 MicroPython 官方页面解析。
 
 基本模式由浏览器定位并通过 Open-Meteo 获取当地温度和天气，时间取自当前设备。网页保持打开时，时间每分钟变化、天气每 15 分钟更新；开启“自动同步到已连接的 ESP32”后，变化会通过本地 Helper 自动发送到灯板。
 

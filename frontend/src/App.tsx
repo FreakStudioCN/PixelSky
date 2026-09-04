@@ -11,10 +11,10 @@ import { Timeline } from "@/components/pixelsky/Timeline";
 import { ToolStrip, type Tool } from "@/components/pixelsky/ToolStrip";
 import { TopBar } from "@/components/pixelsky/TopBar";
 import { WorkshopCard } from "@/components/pixelsky/WorkshopCard";
-import { checkDevice, flashFirmware, generateAnimation, getHealth, getPorts, testLeds, uploadAnimation, uploadRuntime, type DeviceCheck } from "@/lib/helper";
+import { checkDevice, createFirmwarePlan, downloadFirmware, flashFirmware, flashOfficialFirmware, generateAnimation, getHealth, getPorts, getToolchainStatus, installToolchain, resolveFirmware, testLeds, uploadAnimation, uploadRuntime, type DeviceCheck, type FirmwareInfo, type FirmwarePlan } from "@/lib/helper";
 import { codeFilename, downloadText, toArduinoCode, toMicroPythonCode, type CodeExportFormat } from "@/lib/codegen";
 import { classifyWeather, renderBasicFrame, type BasicColors, type BasicDisplay, type WeatherKind } from "@/lib/basic-mode";
-import { CANVAS_PRESETS, EMPTY, MAX_FRAMES, createProject, defaultFrameName, downloadJson, emptyFrame, frameDurationForFps, parseProject, resizeFrames, safeFileName, sanitizeFrames, toAnimationJson, type EspChip, type Frame, type PixelProject, type ViewMode } from "@/lib/pixel";
+import { CANVAS_PRESETS, EMPTY, MAX_FRAMES, boardDefaultPin, boardFirmwareChip, boardFirmwareName, boardLabel, createProject, defaultFrameName, downloadJson, emptyFrame, frameDurationForFps, parseProject, resizeFrames, safeFileName, sanitizeFrames, toAnimationJson, type Frame, type PixelProject, type ViewMode } from "@/lib/pixel";
 
 type Notice = { text: string; error?: boolean } | null;
 type CreationMode = "basic" | "custom";
@@ -64,10 +64,12 @@ export default function App() {
   const [ports, setPorts] = useState<string[]>([]);
   const [port, setPort] = useState("");
   const [uploading, setUploading] = useState<"runtime" | "animation" | null>(null);
-  const [workshopBusy, setWorkshopBusy] = useState<"check" | "led" | "flash" | "deploy" | null>(null);
+  const [workshopBusy, setWorkshopBusy] = useState<"check" | "led" | "firmware" | "flash" | "manual" | "deploy" | null>(null);
   const [deviceResult, setDeviceResult] = useState<DeviceCheck | null>(null);
   const [firmware, setFirmware] = useState<File | null>(null);
-  const [chip, setChip] = useState<EspChip>("esp32c3");
+  const [firmwareInfo, setFirmwareInfo] = useState<FirmwareInfo | null>(null);
+  const [firmwarePlan, setFirmwarePlan] = useState<FirmwarePlan | null>(null);
+  const [firmwareConfirmed, setFirmwareConfirmed] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<number | null>(null);
@@ -78,6 +80,7 @@ export default function App() {
   const project: PixelProject = useMemo(() => ({ version: 1, name, width, height, fps, brightness, frames, frame_durations: frameDurations, frame_names: frameNames, loop, ...hardware }), [name, width, height, fps, brightness, frames, frameDurations, frameNames, loop, hardware]);
   const basicFrame = useMemo(() => renderBasicFrame(basicDisplay, now, temperature, weather, basicColors), [basicDisplay, now, temperature, weather, basicColors]);
   const activeProject: PixelProject = useMemo(() => creationMode === "basic" ? ({ ...project, name: `基本模式-${basicDisplay === "time" ? "时间" : basicDisplay === "temperature" ? "温度" : "天气"}`, width: 16, height: 8, fps: 1, frames: [basicFrame], frame_durations: [1000], frame_names: ["实时显示"], loop: true }) : project, [creationMode, project, basicDisplay, basicFrame]);
+  const chip = boardFirmwareChip(activeProject.board);
   const activeWidth = activeProject.width;
   const activeHeight = activeProject.height;
   const tell = useCallback((text: string, error = false) => { setNotice({ text, error }); if (noticeTimer.current) window.clearTimeout(noticeTimer.current); noticeTimer.current = window.setTimeout(() => setNotice(null), 3500); }, []);
@@ -205,7 +208,7 @@ export default function App() {
 
   const openProject = async (file?: File) => {
     if (!file) return;
-    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setFrameNames(opened.frame_names); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ board: opened.board, pin: opened.pin, pixel_order: opened.pixel_order, matrix_layout: opened.matrix_layout, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setChip(opened.board === "esp32_wroom" ? "esp32" : "esp32c3"); setCreationMode("custom"); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
+    try { const opened = parseProject(await file.text()); setName(opened.name); setWidth(opened.width); setHeight(opened.height); setFrames(opened.frames); setFrameDurations(opened.frame_durations); setFrameNames(opened.frame_names); setLoop(opened.loop); setFps(opened.fps); setBrightness(opened.brightness); setHardware({ board: opened.board, pin: opened.pin, pixel_order: opened.pixel_order, matrix_layout: opened.matrix_layout, flip_h: opened.flip_h, flip_v: opened.flip_v, rotate: opened.rotate, gamma: opened.gamma, r_balance: opened.r_balance, g_balance: opened.g_balance, b_balance: opened.b_balance }); setCreationMode("custom"); setHistory([]); setFuture([]); setActiveIndex(0); setPlaying(false); tell("项目或 RGB565 文件已导入"); }
     catch (error) { tell(error instanceof Error ? error.message : "项目 JSON 格式无效", true); }
   };
 
@@ -228,19 +231,47 @@ export default function App() {
 
   const sendToDevice = async (mode: "runtime" | "animation") => {
     if (!port) return tell("请先选择 ESP32 串口", true); setUploading(mode);
-    try { if (mode === "runtime") await uploadRuntime({ port, project: activeProject }); else await uploadAnimation({ port, project: activeProject }); tell(mode === "runtime" ? "完整运行时上传成功" : "动画已更新，设备正在重启"); }
+    try { if (activeProject.board === "esp32c3_supermini") { const helper = await getHealth(); if (!helper.features?.includes("esp32c3-supermini")) throw new Error("当前 Helper 尚未加载 SuperMini 支持，请关闭旧 Helper 后重新启动或安装最新版"); } if (mode === "runtime") await uploadRuntime({ port, project: activeProject }); else await uploadAnimation({ port, project: activeProject }); tell(mode === "runtime" ? "完整运行时上传成功" : "动画已更新，设备正在重启"); }
     catch (error) { tell(error instanceof Error ? error.message : "上传失败", true); }
     finally { setUploading(null); }
   };
 
-  const workshopAction = async (action: "check" | "led" | "flash" | "deploy") => {
-    if (!port) return tell("请先选择 ESP32 串口", true); if (action === "flash" && !firmware) return tell("请先选择 MicroPython .bin 固件", true); setWorkshopBusy(action);
+  const workshopAction = async (action: "check" | "led" | "manual" | "deploy") => {
+    if (!port) return tell("请先选择 ESP32 串口", true);
+    if (action === "manual" && !firmware) return tell("请先选择 MicroPython .bin 固件", true);
+    if (action === "manual" && !window.confirm(`即将擦除 ${port} 的全部 Flash，并烧录本地固件。是否继续？`)) return;
+    setWorkshopBusy(action);
     try {
       if (action === "check") { const result = await checkDevice(port); setDeviceResult(result); tell("设备检查全部完成"); }
       if (action === "led") { await testLeds(port, activeWidth * activeHeight, activeProject.pin); tell("灯板红绿蓝测试完成"); }
-      if (action === "flash" && firmware) { await flashFirmware(port, firmware, chip); tell("固件烧录完成，请等待设备重启"); }
+      if (action === "manual" && firmware) { await flashFirmware(port, firmware, chip); tell("本地固件烧录完成，请等待设备重启"); }
       if (action === "deploy") { const result = await checkDevice(port); setDeviceResult(result); await uploadRuntime({ port, project: activeProject }); tell("课前检查和课堂部署完成"); }
     } catch (error) { tell(error instanceof Error ? error.message : "设备操作失败", true); }
+    finally { setWorkshopBusy(null); }
+  };
+
+  const prepareOfficialFirmware = async () => {
+    if (!port) return tell("请先选择 ESP32 串口", true);
+    setWorkshopBusy("firmware"); setFirmwarePlan(null); setFirmwareConfirmed(false);
+    try {
+      const helper = await getHealth();
+      if (!helper.features?.includes("firmware-resolve")) throw new Error(`当前 Helper ${helper.version ?? "版本过旧"}，请重新安装 Helper 0.7.0 或更高版本`);
+      const toolchain = await getToolchainStatus();
+      if (!toolchain.ok) await installToolchain();
+      const resolved = await resolveFirmware(chip);
+      const info = resolved.cached ? resolved : await downloadFirmware(chip);
+      const plan = await createFirmwarePlan(port, chip);
+      setFirmwareInfo(info); setFirmwarePlan(plan);
+      tell(`${plan.board} ${plan.version} 已缓存，请核对烧录计划`);
+    } catch (error) { tell(error instanceof Error ? error.message : "官方固件准备失败", true); }
+    finally { setWorkshopBusy(null); }
+  };
+
+  const burnOfficialFirmware = async () => {
+    if (!port || !firmwarePlan || !firmwareConfirmed) return tell("请先获取固件并确认烧录计划", true);
+    setWorkshopBusy("flash");
+    try { await flashOfficialFirmware(port, chip); setFirmwareConfirmed(false); tell("官方固件烧录完成，请等待设备重启后执行课堂快速部署"); }
+    catch (error) { tell(error instanceof Error ? error.message : "官方固件烧录失败", true); }
     finally { setWorkshopBusy(null); }
   };
 
@@ -274,15 +305,15 @@ export default function App() {
       </section>
       <aside className="grid content-start gap-4">
         {creationMode === "basic" ? <BasicModeCard display={basicDisplay} colors={basicColors} temperature={temperature} weather={weather} locationLabel={locationLabel} loading={weatherLoading} error={weatherError} autoSync={basicAutoSync} syncDisabled={!online || !port} syncing={uploading === "animation"} onDisplayChange={setBasicDisplay} onColorsChange={setBasicColors} onRefresh={refreshWeather} onAutoSyncChange={(enabled) => { lastBasicSync.current = ""; setBasicAutoSync(enabled); }} /> : <AiCard prompt={prompt} onPromptChange={setPrompt} onGenerate={() => void generate()} loading={generating} listening={listening} voiceSupported={voiceSupported} onToggleVoice={toggleVoice} />}
-        <DeviceCard online={online} checking={checking} ports={ports} port={port} board={activeProject.board} onBoardChange={(board) => { setHardware((current) => ({ ...current, board, pin: board === "esp32_wroom" ? 5 : 2 })); setChip(board === "esp32_wroom" ? "esp32" : "esp32c3"); }} onPortChange={setPort} onRefresh={() => void refreshPorts()} onUploadRuntime={() => void sendToDevice("runtime")} onUploadAnimation={() => void sendToDevice("animation")} busy={uploading} />
+        <DeviceCard online={online} checking={checking} ports={ports} port={port} board={activeProject.board} onBoardChange={(board) => { setHardware((current) => ({ ...current, board, pin: boardDefaultPin(board) })); setFirmwareInfo(null); setFirmwarePlan(null); setFirmwareConfirmed(false); }} onPortChange={(value) => { setPort(value); setFirmwarePlan(null); setFirmwareConfirmed(false); }} onRefresh={() => void refreshPorts()} onUploadRuntime={() => void sendToDevice("runtime")} onUploadAnimation={() => void sendToDevice("animation")} busy={uploading} />
       </aside>
       {creationMode === "custom" && <><div className="xl:col-span-2"><Timeline frames={frames} frameDurations={frameDurations} frameNames={frameNames} loop={loop} width={width} activeIndex={activeIndex} previewIndex={previewIndex} playing={playing} fps={fps} brightness={brightness} onSelect={(index) => { setActiveIndex(index); setPlaying(false); }} onAdd={addFrame} onDuplicate={duplicateFrame} onDelete={deleteFrame} onUndo={undo} canUndo={history.length > 0} onReorder={reorderFrames} onPrevious={() => { setActiveIndex((index) => (index - 1 + frames.length) % frames.length); setPlaying(false); }} onNext={() => { setActiveIndex((index) => (index + 1) % frames.length); setPlaying(false); }} onLoopChange={setLoop} onDurationChange={changeFrameDuration} onNameChange={changeFrameName} onTogglePlay={() => { if (playing) setActiveIndex(previewIndex); else setPreviewIndex(activeIndex); setPlaying((value) => !value); }} onFpsChange={(nextFps) => { setFps(nextFps); setFrameDurations((items) => items.map(() => frameDurationForFps(nextFps))); }} onBrightnessChange={setBrightness} /></div>
       <div className="xl:col-span-2"><MediaCard width={width} height={height} color={color} onFrames={(next, mediaName) => { replaceFrames(next, next.map(() => frameDurationForFps(fps)), next.map((_, index) => defaultFrameName(index))); setName(mediaName); setActiveIndex(0); setPlaying(false); tell("媒体已转换为可编辑像素动画"); }} /></div></>}
-      <div className="xl:col-span-2"><HardwareSettingsCard project={activeProject} onChange={(patch) => { setHardware((current) => ({ ...current, ...patch })); if (patch.board) setChip(patch.board === "esp32_wroom" ? "esp32" : "esp32c3"); }} /></div>
+      <div className="xl:col-span-2"><HardwareSettingsCard project={activeProject} onChange={(patch) => { setHardware((current) => ({ ...current, ...patch })); if (patch.board) { setFirmwareInfo(null); setFirmwarePlan(null); setFirmwareConfirmed(false); } }} /></div>
       <div className="xl:col-span-2"><CodePanel project={activeProject} /></div>
-      <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} chip={chip} busy={workshopBusy} onChipChange={setChip} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onFlash={() => void workshopAction("flash")} onDeploy={() => void workshopAction("deploy")} /></div>
+      <div className="xl:col-span-2"><WorkshopCard port={port} result={deviceResult} firmwareName={firmware?.name ?? ""} firmwareInfo={firmwareInfo} firmwarePlan={firmwarePlan} firmwareConfirmed={firmwareConfirmed} firmwareTarget={boardFirmwareName(activeProject.board)} busy={workshopBusy} onCheck={() => void workshopAction("check")} onLedTest={() => void workshopAction("led")} onFirmware={setFirmware} onPrepareFirmware={() => void prepareOfficialFirmware()} onFirmwareConfirmed={setFirmwareConfirmed} onOfficialFlash={() => void burnOfficialFirmware()} onManualFlash={() => void workshopAction("manual")} onDeploy={() => void workshopAction("deploy")} /></div>
     </main>
-      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本机 Helper 已连接" : "○ 离线编辑 · 硬件需本机 Helper"}</span><span>{activeProject.board === "esp32_wroom" ? "ESP32 WROOM" : "XIAO ESP32-C3"} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {matrixLayoutLabel(activeProject.matrix_layout)} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.6</span></div></footer>
+      <footer className="border-t border-border px-6 py-3 font-mono text-[10px] text-muted-foreground"><div className="mx-auto flex max-w-[1550px] flex-wrap justify-between gap-2"><span>{online ? "● 本机 Helper 已连接" : "○ 离线编辑 · 硬件需本机 Helper"}</span><span>{boardLabel(activeProject.board)} · GPIO {activeProject.pin} · {activeProject.pixel_order} · {matrixLayoutLabel(activeProject.matrix_layout)} · 最多 {MAX_FRAMES} 帧</span><span>PixelSky Studio · v0.6</span></div></footer>
     {notice && <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-destructive/60 bg-destructive/20" : "border-primary/50 bg-surface-raised"}`}><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)} aria-label="关闭提示"><X className="h-4 w-4" /></button></div>}
   </div>;
 }
